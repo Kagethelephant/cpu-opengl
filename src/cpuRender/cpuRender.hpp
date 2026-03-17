@@ -19,7 +19,8 @@ public:
    /// @param cam: Reference to the window to be rendered to. Used to find resolution and SFML render target
    cpuRenderObject(camera& cam);
 
-   void bindObject(const object& obj);
+   void bindObject(const object& obj){ m_objects.push_back(obj);}
+   
 
    void addLight(const light& newLight){ m_lights.push_back(newLight);}
 
@@ -71,14 +72,93 @@ private:
    std::vector<float> m_zBuffer;
 
 
-   std::vector<vertex> m_vertAttribs;
+   std::vector<vertex> m_vertices;
 
    std::vector<triangle3d> m_primatives;
 
-   /// @brief: Scanline triangle fill algorithm. This is a common method of rasterization although it is very inefficient
-   /// when ran on the CPU as we are doing here. steps in pipeline: Rasterization, Fragment Shader
-   /// @param tri: Pixel array for 32 bit trucolor + alpha (8 bits for r,g,b and alpha)
-   /// @param res: The resolution of the window
+   /// @brief Rasterization stage of the CPU rendering pipeline. This stage evaluates
+   /// the fragment shader and is the most complex part of the renderer.
+   ///
+   /// The rasterizer first computes an axis-aligned bounding box (AABB) around the
+   /// triangle in screen space. It then iterates over each pixel within the box and
+   /// uses barycentric coordinates to determine whether the pixel lies inside the
+   /// triangle and to interpolate vertex attributes (uv, screenPos, fragPos, etc.).
+   ///
+   /// The interpolated attributes are used to compute shading, texture color,
+   /// fragment color, and depth. If the fragment depth passes the z-buffer test,
+   /// the pixel buffer and depth buffer are updated.
+   ///
+   /// Barycentric Coordinates:
+   /// Barycentric coordinates express a point inside a triangle as a weighted
+   /// combination of the triangle's three vertices (A, B, C):
+   ///
+   ///   P = α*A + β*B + γ*C
+   ///
+   /// where α, β, γ are the barycentric weights and satisfy: α + β + γ = 1.
+   /// The weights represent how close the point is to each vertex. For example,
+   /// if α is large, the point lies closer to vertex A.
+   ///
+   /// The weights can be computed using edge function areas. Each weight equals
+   /// twice the signed area of the sub-triangle opposite the vertex divided by
+   /// twice the signed area of the full triangle. Cross product returns twice the signed
+   /// area enclosed by 2 vectors, so the equations for barycentric weights are:
+   ///
+   ///   α = cross(P-A, B-A) / cross(C-A, B-A)
+   ///   β = cross(P-B, C-B) / cross(C-A, B-A)
+   ///   γ = cross(P-C, A-C) / cross(C-A, B-A)
+   ///
+   /// These barycentric weights change linearly in screenspace for a change in x and y,
+   /// so instead of calculating per pixel we can compute the rate of change or
+   /// partial derivative of the barycentric weights with respect to screen x and y.
+   ///
+   /// Partial derivative with respect to x (∂F/∂x) can be approximated by:
+   ///   ∂F/∂x ≈ F(x+1, y) - F(x, y)
+   /// 
+   /// For example, the partial derivative approximation of α with respect to x (∂α/∂x):
+   /// starts with the function for α:
+   ///
+   ///   α(x, y) = (AB × AP) / (AB × AC)
+   ///
+   /// Expanding the cross products:
+   ///
+   ///   α(x, y) = [(Bx - Ax)*(Py - Ay) - (By - Ay)*(Px - Ax)] / area
+   ///
+   /// Add 1 to x for α(x+1, y):
+   ///                                                  Px       + 1
+   ///   α(x+1, y) = [(Bx - Ax)*(Py - Ay) - (By - Ay)*((Px - Ax) + 1)] / area
+   ///
+   /// Distribute -(By - Ay) over the sum:
+   ///
+   ///   α(x+1, y) = [(Bx - Ax)*(Py - Ay) - (By - Ay)*(Px - Ax) - (By - Ay)*1] / area
+   ///
+   /// Separate the original α(x, y) term:
+   //                [                      a(x, y)                    ] 
+   ///   α(x+1, y) = [(Bx - Ax)*(Py - Ay) - (By - Ay)*(Px - Ax)] / area - (By - Ay) / area
+   ///
+   /// Recognize the first fraction as α(x, y):
+   ///
+   ///   α(x+1, y) = α(x, y) - (By - Ay) / area
+   ///
+   /// Therefore:
+   ///
+   ///   alphaDx = α(x+1, y) - α(x, y) 
+   ///   alphaDx = - (By - Ay) / area
+   ///
+   /// Now that we have the partial derivative of each barycentric weight, we can use this to
+   /// compute the partial derivative of any vertex attribute with respect to screen x and y.
+   /// This is used to compute the fragPos derivative by plugging the vertex attributes into
+   /// the barycentric formula with the partial derivative weights, e.g.:
+   ///
+   ///   vec3 dFdx = (v0.fragPos * alphaDx + v1.fragPos * betaDx + v2.fragPos * gammaDx).xyz();
+   ///
+   /// This is done outside of the fragment loop because the face normal is constant across
+   /// the triangle, so calculating it per fragment is unnecessary.
+   ///
+   /// Other vertex attributes use the stepped barycentric weights to find the exact
+   /// interpolated value within the fragment loop.
+   ///
+   /// @param tri Pixel array for 32-bit true color + alpha (8 bits per r,g,b,alpha)
+   /// @param res The resolution of the window
    void raster(const triangle3d& p, const object& obj, const model::subMesh& mesh);
    
    /// @brief: In-place clipping of triangles in m_triangleAttribs against all 6 planes 

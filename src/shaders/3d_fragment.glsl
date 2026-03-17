@@ -17,29 +17,32 @@ void main()
 {
 
    float ambientStrength = 0.2;
-   vec3 sum = vec3(0.0);
-   vec4 newCol = vec4(0,0,0,0);
+   vec3 lightSum = vec3(0.0);
+   vec4 sampleColor = vec4(0,0,0,0);
 
 
    for(int i = 0; i < lightCount; i ++){
 
-      vec3 ambient = ambientStrength * lightCol[i];
-
-      vec3 norm = normalize(cross(dFdx(fragPos), dFdy(fragPos)));
-
+      // Calculate the triangle face normal and light direction 
+      vec3 normal = normalize(cross(dFdx(fragPos), dFdy(fragPos)));
       vec3 lightDir = normalize(lightPos[i] - fragPos); 
-      float diff = max(dot(norm, lightDir), 0.0);
-      vec3 diffuse = diff * lightCol[i];
-      sum += diffuse + ambient;
+
+      // Calculate ambient and diffuse lighting for this light
+      vec3 ambient = ambientStrength * lightCol[i];
+      vec3 diffuse = max(dot(normal, lightDir), 0.0) * lightCol[i];
+
+      // Sum light contributions from all lights
+      lightSum += diffuse + ambient;
    }
 
+   // If the object does not have a texture than use its solid color
    if (hasTexture == 1u){
-      newCol = texture(diffuseTex, TexCoord);
+      sampleColor = texture(diffuseTex, TexCoord);
    }
    else {
-      newCol = vec4(objCol,1.0);
+      sampleColor = vec4(objCol,1.0);
    }
-
-   vec4 result = vec4(sum,1.0) * newCol;
-   FragColor = result;
+   
+   // Multiply the light by the sample color to shade object
+   FragColor = vec4(lightSum,1.0) * sampleColor;
 }

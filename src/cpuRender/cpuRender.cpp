@@ -2,7 +2,7 @@
 // Standard Libraries
 #include <algorithm>
 #include <cstdint>
-#include <strings.h>
+#include <cstring>
 #include <vector>
 #include <math.h>
 // Program Headers
@@ -14,14 +14,13 @@
 
 
 
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-// CONSTRUCTOR
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+//---------------------- INITIALIZATION ----------------------
+
 cpuRenderObject::cpuRenderObject(camera& cam) : m_camera{cam}, m_window{cam.getWindow()}{
 
-   // Calculate the planes that make up the frustum (box that represents the field of view)
    m_resolution = vec2(m_window.fboWidth,m_window.fboHeight);
 
+   // Calculate the planes in clip-space that make up the frustum (box that represents the field of view)
    m_planes[0] = vec4( 1, 0, 0, 1);  // Left
    m_planes[1] = vec4(-1, 0, 0, 1);  // Right 
    m_planes[2] = vec4( 0, 1, 0, 1);  // Bottom
@@ -33,92 +32,111 @@ cpuRenderObject::cpuRenderObject(camera& cam) : m_camera{cam}, m_window{cam.getW
    m_clearBuffer = std::vector<std::uint8_t>(m_resolution[0] * m_resolution[1] * 4, 0);
    m_zBuffer = std::vector<float>(m_resolution[0] * m_resolution[1], 1.0f);
 
-   vec4 bgColor(hexColorToRGB(Color::Black));
-   int index = 0;
+   // Make a clear buffer to initialize the screen (pixelBuffer) to the background color every frame
+   vec4 backgroundColor(hexColorToRGB(Color::Black));
 
    for (int y = 0; y < m_resolution[1]; y++){
       for (int x = 0; x < m_resolution[0]; x++){
 
-         index = (y * m_resolution[0] + x);
-         m_clearBuffer[index*4] = bgColor[0];
-         m_clearBuffer[index*4 + 1] = bgColor[1];
-         m_clearBuffer[index*4 + 2] = bgColor[2];
-         m_clearBuffer[index*4 + 3] = bgColor[3];
+         int index = (y * m_resolution[0] + x);
+         m_clearBuffer[index*4] = backgroundColor[0];
+         m_clearBuffer[index*4 + 1] = backgroundColor[1];
+         m_clearBuffer[index*4 + 2] = backgroundColor[2];
+         m_clearBuffer[index*4 + 3] = backgroundColor[3];
       }
    }
    m_pixelBuffer = m_clearBuffer;
 }
 
-void cpuRenderObject::bindObject(const object& obj) {
-   m_objects.push_back(obj);
-}
 
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-// TRIANGLE PROJECTION
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+//---------------------- 3D RENDER PIPELINE ----------------------
+
 void cpuRenderObject::render() {
- 
-   for (const object& obj : m_objects){
+   // Camera owns view and projection matrix since it also owns camera FOV, direction and position 
+   mat4x4 vp = m_camera.getViewMatrix() * m_camera.getProjectionMatrix();
 
-      // Fetch model associated with object
-      model mod = obj.getModel();
-      // Model * View * Project matrix
-      mat4x4 vp = m_camera.getViewMatrix() * m_camera.getProjectionMatrix();
+   for (const object& obj : m_objects){
+      const model& mod = obj.getModel();
+     
+      // Object owns scale and transformation matrix since it also owns object position, rotation and scale
       mat4x4 m = obj.getScaleMatrix() * obj.getTransformMatrix();
 
-      m_vertAttribs.resize(mod.getVertices().size());
+      const std::vector<vertex>& modVertices = mod.getVertices();
+      m_vertices.resize(modVertices.size());
 
-      // Vertex shader (Model View Projection matrix multiplication)
-      for(int i=0; i<mod.getVertices().size(); i ++){
-         vertex newVert = mod.getVertices()[i];
-         newVert.fragPos = newVert.screenPos * m;
-         newVert.screenPos *= (m * vp);
+      // Load and apply vertex shader to model vertices
+      for(int i=0; i<modVertices.size(); i ++){
+         const vertex& modVert = modVertices[i];
+         const vec2& aTex = modVert.uv;
+         const vec4& aPos = modVert.screenPos;
+         vertex newVert;
+
+         // ---------- VERTEX SHADER
+
+         newVert.uv = aTex;
+         newVert.fragPos = aPos * m;
+         newVert.screenPos = aPos * m * vp;
+
+         // ---------- VERTEX SHADER
+        
+         // Save the clip position (opengl does this automatically)
          newVert.clipPos = newVert.screenPos;
-         m_vertAttribs[i] = newVert;
+         m_vertices[i] = newVert;
       }
 
+      
       for (const auto& mesh : mod.getSubMeshes()) {
-         for(int i=0; i< mesh.indices.size(); i += 3){
+         m_primatives.clear();
+         m_primatives.reserve(mesh.indices.size()/3);
 
-            // Generate triangles from vertices and indices
+         // ---------- PRIMATIVE ASSEMBLY
+         for(int i=0; i< mesh.indices.size(); i += 3){
+            // Generate triangles from vertices and indices (opengl does this in background)
             int i0 = mesh.indices[i];
             int i1 = mesh.indices[i+1];
             int i2 = mesh.indices[i+2];
-            m_primatives.emplace_back(m_vertAttribs[i0],m_vertAttribs[i1],m_vertAttribs[i2]);
+            m_primatives.emplace_back(m_vertices[i0],m_vertices[i1],m_vertices[i2]);
          }
-         // Clip triangles.
+
+         // ---------- TRIANGLE CLIPPING
          clipTriangles();
 
          for(int i=0; i< m_primatives.size(); i++) {
             triangle3d& p = m_primatives[i];
+
+            // ---------- PERSPECTIVE DIVIDE
             p.perspectiveDivide();
 
+            // ---------- VIEWPORT TRANSFORMATION
             for (int i=0; i<3; i++){
                // Projection results are between -1 and 1. So shift to the positive and scale to fit screen
                p.v[i].screenPos.x = (p.v[i].screenPos.x + 1.0f) * 0.5f * m_resolution.x;
                p.v[i].screenPos.y = (p.v[i].screenPos.y + 1.0f) * 0.5f * m_resolution.y;
             }
-            // Do not raster if winding is incorrect (cull back faces)
+
+            // ---------- BACKFACE CULLING AND RASTERIZATION
+            // Do not raster if winding is incorrect
             if(!backFaceCulling(p)){ raster(p, obj, mesh);}
          }
          m_primatives.clear();
       }
    }
 
+   // Texture needs to be attached to the window FBO. window render call will draww it to the window
    GLScopedTexture2D tempTexture(m_window.colorTex);
    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_window.fboWidth, m_window.fboHeight, GL_RGBA, GL_UNSIGNED_BYTE, m_pixelBuffer.data());
-   // Clear the pixel buffer with the background color before drawing each triangle
-   m_pixelBuffer = m_clearBuffer;
+   // Clear the pixel buffer with the background color so frames dont stack
+   std::memcpy(m_pixelBuffer.data(), m_clearBuffer.data(), m_pixelBuffer.size());
    // Clear the z buffer with far depth
-   m_zBuffer.assign(m_zBuffer.size(), 1.0f);
+   std::fill(m_zBuffer.begin(), m_zBuffer.end(), 1.0f);
 }
 
 
 
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-// TRIANGLE CLIPPING
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+//---------------------- TRIANGLE CLIPPING ----------------------
+
 void cpuRenderObject::clipTriangles() {
    
    // Create buffer to hold triangles that need to go through the split function and 
@@ -126,21 +144,16 @@ void cpuRenderObject::clipTriangles() {
    std::vector<triangle3d> splitBuffer;
    splitBuffer.reserve(m_primatives.size() * 2);
 
-   // Cycle through each plane and each triangle so we can clip them against each plane
-   int next, last;
-   float t1, t2;
-   vertex p1, p2;
-
    for (vec4& plane : m_planes) {
       for(triangle3d& t : m_primatives) {
 
-         // For consiseness check what points are out of the current plane ahead of time
+         // For conciseness check what points are out of the current plane ahead of time
          // Dot product of plane in Ax + Bx + Cz + D form and point will tell you what side 
          // the plane it is on. negative and positive on opisite sides and 0 on the plane
          bool clipped[3] = {
-            plane.dot(t.v[0].screenPos) < 0.0f,
-            plane.dot(t.v[1].screenPos) < 0.0f,
-            plane.dot(t.v[2].screenPos) < 0.0f};
+            plane.dot(t.v[0].clipPos) < 0.0f,
+            plane.dot(t.v[1].clipPos) < 0.0f,
+            plane.dot(t.v[2].clipPos) < 0.0f};
 
          // If all of the points are not clipped by this plane then pass along the triangle to the next step
          if (clipped[0]+clipped[1]+clipped[2] == 0){splitBuffer.push_back(t); continue;}
@@ -149,18 +162,18 @@ void cpuRenderObject::clipTriangles() {
          // Cycle through all of the points to find the clipped points
          for(int i=0; i<3; i++){
             // Get the position of the next and last point clockwise from the current point
-            next = wrap(i+1,3);
-            last = wrap(i+2,3);
+            int next = wrap(i+1,3);
+            int last = wrap(i+2,3);
             // We make sure the last point is not clipped so we exclude triangles with all points out of the plane
             if (clipped[i] and not clipped[last]){
                // If there are 2 points and they are the current and next point
                if (clipped[next]){
                   // Find new points where the edges of the triangles intercect the plane
-                  t1 = planeIntersect(t.v[i].screenPos, t.v[last].screenPos, plane);
-                  t2 = planeIntersect(t.v[next].screenPos, t.v[last].screenPos, plane);
-
-                  p1 = t.v[i].lerp(t.v[last], t1);
-                  p2 = t.v[next].lerp(t.v[last], t2);
+                  float t1 = planeIntersect(t.v[i].screenPos, t.v[last].screenPos, plane);
+                  float t2 = planeIntersect(t.v[next].screenPos, t.v[last].screenPos, plane);
+                  // Lerp all vertex attributes for new triangle points
+                  vertex p1 = t.v[i].lerp(t.v[last], t1);
+                  vertex p2 = t.v[next].lerp(t.v[last], t2);
 
                   splitBuffer.emplace_back(p1,p2,t.v[last]);
                   break;
@@ -168,13 +181,12 @@ void cpuRenderObject::clipTriangles() {
                // If there is only one point and it is the current point
                else {
                   // Find new points where the edges of the triangles intercect the plane
-                  t1 = planeIntersect(t.v[i].screenPos, t.v[last].screenPos, plane);
-                  t2 = planeIntersect(t.v[i].screenPos, t.v[next].screenPos, plane);
+                  float t1 = planeIntersect(t.v[i].screenPos, t.v[last].screenPos, plane);
+                  float t2 = planeIntersect(t.v[i].screenPos, t.v[next].screenPos, plane);
+                  // Lerp all vertex attributes for new triangle points
+                  vertex p1 = t.v[i].lerp(t.v[last], t1);
+                  vertex p2 = t.v[i].lerp(t.v[next], t2);
 
-                  p1 = t.v[i].lerp(t.v[last], t1);
-                  p2 = t.v[i].lerp(t.v[next], t2);
-
-                  // Create 2 new triangles with the 2 new points and the 2 unclipped points
                   splitBuffer.emplace_back(p1,p2,t.v[next]);
                   splitBuffer.emplace_back(p1,t.v[next],t.v[last]);
                   break;
@@ -190,27 +202,26 @@ void cpuRenderObject::clipTriangles() {
 }
 
 
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-// FILL TRIANGLE
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+//---------------------- FILL TRIANGLE ----------------------
+
 void cpuRenderObject::raster(const triangle3d& pr, const object& obj, const model::subMesh& mesh) {
    // Bounding box triangle filling method with barycentric coordinates to interpolate 
    // between points. This is the trickiest part of the pipeline
    const vertex& v0 = pr.v[0];
    const vertex& v1 = pr.v[1];
    const vertex& v2 = pr.v[2];
-   // Screen-space positions
+
    vec2 p0(v0.screenPos.x, v0.screenPos.y);
    vec2 p1(v1.screenPos.x, v1.screenPos.y);
    vec2 p2(v2.screenPos.x, v2.screenPos.y);
-
+   // Divide is more expensive than multiply so store the inverse w (used for perspective correction)
    float invW0 = 1.0f / v0.clipPos.w;
    float invW1 = 1.0f / v1.clipPos.w;
    float invW2 = 1.0f / v2.clipPos.w;
 
-   float ndcZ0 = v0.clipPos.z * invW0;
-   float ndcZ1 = v1.clipPos.z * invW1;
-   float ndcZ2 = v2.clipPos.z * invW2;
+   float clipZ0 = v0.clipPos.z * invW0;
+   float clipZ1 = v1.clipPos.z * invW1;
+   float clipZ2 = v2.clipPos.z * invW2;
 
    vec4 fragOverW0 = v0.fragPos * invW0;
    vec4 fragOverW1 = v1.fragPos * invW1;
@@ -220,36 +231,20 @@ void cpuRenderObject::raster(const triangle3d& pr, const object& obj, const mode
    vec2 uvOverW1 = v1.uv * invW1;
    vec2 uvOverW2 = v2.uv * invW2;
 
-   int xmin = std::max((int)std::min({ p0.x, p1.x, p2.x }), 1);
-   int xmax = std::min((int)std::max({ p0.x, p1.x, p2.x }), (int)m_resolution.x - 1);
-   int ymin = std::max((int)std::min({ p0.y, p1.y, p2.y }), 1);
-   int ymax = std::min((int)std::max({ p0.y, p1.y, p2.y }), (int)m_resolution.y - 1);
+   int xmin = std::max((int)std::min({ p0.x, p1.x, p2.x }), 0);
+   int xmax = std::min((int)std::max({ p0.x, p1.x, p2.x }), (int)m_resolution.x);
+   int ymin = std::max((int)std::min({ p0.y, p1.y, p2.y }), 0);
+   int ymax = std::min((int)std::max({ p0.y, p1.y, p2.y }), (int)m_resolution.y);
 
 
-   // --- Edge function setup
-   // Cross product is used to get 2x the area of the triangle
+   // ---------- BARYCENTRIC CALCULATIONS (details in header)
+
+   // Cross product of 2 edges of the triangle yields 2x the area of the triangle
    float area = (p2 - p0).cross(p1 - p0);
    if (area == 0.0f) return;
    float invArea = 1.0f / area;
 
-
-
-   // Start with the barycentric formula for α at point P:
-   //   α(P) = (AB × AP) / (AB × AC)
-   //         = [(Bx - Ax)*(Py - Ay) - (By - Ay)*(Px - Ax)] / area
-   //
-   // Add 1 to Px for a change of 1 pixel in x:       Px       + 1
-   //   α(P_new) = [(Bx - Ax)*(Py - Ay) - (By - Ay)*((Px - Ax) + 1)] / area
-   //
-   // Distribute -(By - Ay) over the sum:
-   //   α(P_new) = [(Bx - Ax)*(Py - Ay) - (By - Ay)*(Px - Ax) - (By - Ay)*1] / area
-   //
-   // Separate the original α(P) term:
-   //   α(P_new) = [(Bx - Ax)*(Py - Ay) - (By - Ay)*(Px - Ax)] / area - (By - Ay)/area
-   //
-   // Recognize the first fraction as α(P):
-   //   α(P_new) = α(P) - (By - Ay) / area
-   //   alphaDx = α(P_new) - α(P) = - (By - Ay) / area
+   // Partial derivatives of the barycentric coordinates with respect to screen x and y
    float alphaDx = (p2.y - p1.y) * invArea;
    float alphaDy = (p1.x - p2.x) * invArea;
    float betaDx  = (p0.y - p2.y) * invArea;
@@ -257,24 +252,20 @@ void cpuRenderObject::raster(const triangle3d& pr, const object& obj, const mode
    float gammaDx = (p1.y - p0.y) * invArea;
    float gammaDy = (p0.x - p1.x) * invArea;
 
-   // If A and B are 2 points of a triangle and P is a point inside the triangle
-   // the cross product of AB and AP gives us 2x the area of the triangle formed by the 3 points.
-   // Dividing by 2x area of the triangle (AB cross AC) will give the weight of the ABP area of the
-   // entire triangles area. if AB cross AP / AB cross AC = 0.3 then ABP takes up 30% of the triangle
+   // Initial barycentric coordinates at the first pixel center
    vec2 start(xmin + 0.5f, ymin + 0.5f);
    float alphaY = (start - p1).cross(p2 - p1) * invArea;
    float betaY  = (start - p2).cross(p0 - p2) * invArea;
    float gammaY = (start - p0).cross(p1 - p0) * invArea;
 
-   // --- Approximate geometric normal from screen-space derivatives
+   // Partial derivative of world position (fragPos) with respect to screen x and y
    vec3 dFdx = (v0.fragPos * alphaDx + v1.fragPos * betaDx + v2.fragPos * gammaDx).xyz();
    vec3 dFdy = (v0.fragPos * alphaDy + v1.fragPos * betaDy + v2.fragPos * gammaDy).xyz();
-
+   // Since these vectors are tangent to worldpace triangle face, the cross product will give triangle normal
    vec3 normal = dFdx.cross(dFdy).normal();
 
-   // ======================================================================================
-   // Raster loop
-   // ======================================================================================
+
+   // ---------- RASTER LOOP
 
    for (int y = ymin; y <= ymax; ++y){
       float alphaXY = alphaY;
@@ -285,18 +276,18 @@ void cpuRenderObject::raster(const triangle3d& pr, const object& obj, const mode
 
          if (alphaXY >= 0.0f && betaXY >= 0.0f && gammaXY >= 0.0f){
 
-            float depth = (alphaXY * ndcZ0 + betaXY  * ndcZ1 + gammaXY * ndcZ2) * 0.5f + 0.5f;
+            float depth = (alphaXY * clipZ0 + betaXY  * clipZ1 + gammaXY * clipZ2) * 0.5 + 0.5;
             int index = x + y * m_resolution.x;
 
             if (depth <= m_zBuffer[index]){
                
                // Perspective-correct attribute reconstruction
                float invW = 1.0f / (alphaXY * invW0 + betaXY  * invW1 + gammaXY * invW2);
-
                vec3 fragPos = (fragOverW0 * alphaXY + fragOverW1 * betaXY + fragOverW2 * gammaXY).xyz() * invW;
 
                vec4 texColor;
 
+               // Get color from texture for different channels
                if (mesh.textured) {
                   vec2 uv = (uvOverW0 * alphaXY + uvOverW1 * betaXY + uvOverW2 * gammaXY) * invW;
 
@@ -307,36 +298,52 @@ void cpuRenderObject::raster(const triangle3d& pr, const object& obj, const mode
                   int ty = (int)(uv.y * mesh.tex.h);
                   int texel = (ty * mesh.tex.w + tx) * mesh.tex.channels;
 
-                  if (mesh.tex.channels >= 3) {
-                     int a = 1;
-                     if (mesh.tex.channels == 4) a = mesh.tex.data[texel + 3];
-                     texColor = vec4(mesh.tex.data[texel + 0], mesh.tex.data[texel + 1], mesh.tex.data[texel + 2], a);
+                  // Set channels
+                  if (mesh.tex.channels == 3) {
+                     texColor = vec4(mesh.tex.data[texel + 0], mesh.tex.data[texel + 1], mesh.tex.data[texel + 2], 1);
+                  }
+                  else if (mesh.tex.channels == 4) {
+                     texColor = vec4(mesh.tex.data[texel + 0], mesh.tex.data[texel + 1], mesh.tex.data[texel + 2], mesh.tex.data[texel + 3]);
                   }
                   else { // grayscale
                      float shade = mesh.tex.data[texel] / 255.0f;
                      texColor = vec4(shade,shade,shade,1.0f);
                   }
                }
-               else {
-                  vec4 color = hexColorToRGB(obj.getColor());
-                  texColor = vec4(color.x, color.y, color.z, color.w);
-               }
 
+               // ---------- FRAGMENT SHADER
 
-               // Diffuse + constant ambient
-               vec3 lighting(0,0,0);
+               float ambientStrength = 0.2;
+               vec3 lightSum(0,0,0);
+               vec4 sampleColor;
+
 
                for (const light& l : m_lights){
-                  vec3 L = (l.position - fragPos).normal();
-                  float diff = std::max(normal.dot(L), 0.0f);
-                  lighting += l.color * (diff + 0.2f);
+                  // vec3 normal = dFdx.cross(dFdy).normal(); --- Calculated above
+                  vec3 lightDir = (l.position - fragPos).normal();
+
+                  vec3 ambient = l.color * 0.2f;
+                  vec3 diffuse = l.color * std::max(normal.dot(lightDir), 0.0f);
+
+                  lightSum += diffuse + ambient;
                }
 
-               vec4 result = texColor * vec4(lighting, 1.0f);
-               m_pixelBuffer[index*4 + 0] = std::clamp(result[0], 0.0f, 255.0f);
-               m_pixelBuffer[index*4 + 1] = std::clamp(result[1], 0.0f, 255.0f);
-               m_pixelBuffer[index*4 + 2] = std::clamp(result[2], 0.0f, 255.0f);
-               m_pixelBuffer[index*4 + 3] = std::clamp(result[3], 0.0f, 255.0f);
+               if (mesh.textured) {
+                  sampleColor = texColor;
+               }
+               else {
+                  sampleColor = hexColorToRGB(obj.getColor());
+               }
+
+               vec4 fragColor = sampleColor * vec4(lightSum, 1.0f);
+
+               // ---------- FRAGMENT SHADER
+
+
+               m_pixelBuffer[index*4 + 0] = std::clamp(fragColor[0], 0.0f, 255.0f);
+               m_pixelBuffer[index*4 + 1] = std::clamp(fragColor[1], 0.0f, 255.0f);
+               m_pixelBuffer[index*4 + 2] = std::clamp(fragColor[2], 0.0f, 255.0f);
+               m_pixelBuffer[index*4 + 3] = std::clamp(fragColor[3], 0.0f, 255.0f);
 
                m_zBuffer[index] = depth;
             }
@@ -353,9 +360,7 @@ void cpuRenderObject::raster(const triangle3d& pr, const object& obj, const mode
 
 
 
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-// HELPER FUNCTIONS
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+//---------------------- HELPER FUNCTIONS ----------------------
 
 float cpuRenderObject::planeIntersect(const vec4& a, const vec4& b, const vec4& plane) {
    return plane.dot(a) / (plane.dot(a) - plane.dot(b));

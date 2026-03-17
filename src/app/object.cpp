@@ -92,21 +92,21 @@ model::model(const std::string& filename, bool cwWinding) {
       std::string type;
       stream >> type;
 
-      // ---------- POSITION -----------
+      // ---------- POSITION
       if (type == "v") {
          vec3 p;
          stream >> p.x >> p.y >> p.z;
          objPositions.push_back(p);
       }
 
-      // ---------- TEXCOORD -----------
+      // ---------- TEXCOORD
       else if (type == "vt") {
          vec2 uv;
          stream >> uv.x >> uv.y;
          objTexcoords.push_back(uv);
       }
 
-      // ---------- MTL FILE -----------
+      // ---------- MTL FILE
       else if (type == "mtllib") {
          std::string mtlfile;
          stream >> mtlfile;
@@ -114,7 +114,7 @@ model::model(const std::string& filename, bool cwWinding) {
          loadMTL(dir + mtlfile);
       }
 
-      // ---------- MTL MATERIAL -----------
+      // ---------- MTL MATERIAL
       else if (type == "usemtl") {
          std::string mtlName;
          stream >> mtlName;
@@ -125,10 +125,10 @@ model::model(const std::string& filename, bool cwWinding) {
          m_subMeshes.push_back(newSubmesh);
       }
 
-      // ---------- FACE -----------
+      // ---------- FACE
       else if (type == "f") {
         
-         // ---------- COLLECT INDICES -----------
+         // ---------- COLLECT INDICES
 
          // Create an initial submesh for the current submesh. This ensures that if there is no
          // material (untextured model) than we can still create a submesh
@@ -173,7 +173,7 @@ model::model(const std::string& filename, bool cwWinding) {
          if (vIdx.size() < 3) continue;
 
 
-         // ---------- FAN TRIANGULATION -----------
+         // ---------- FAN TRIANGULATION
          
          for (int i = 1; i < vIdx.size()-1; ++i) {
             // Start with the first triangle (should be {0,1,2} then {0,2,3} for triangle fan)

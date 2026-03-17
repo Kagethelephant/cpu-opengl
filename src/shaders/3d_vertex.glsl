@@ -12,7 +12,6 @@ uniform mat4x4 project;
 
 void main()
 {
-   // vecNorm = aNorm;
    TexCoord = aTex;
    fragPos = vec3( transform * scale * vec4(aPos, 1.0f));
    gl_Position = project * view * transform * scale * vec4(aPos, 1.0f);

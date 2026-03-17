@@ -49,7 +49,7 @@ struct vec2 {
    float mag() const { return std::sqrt(std::pow(c[0],2) + std::pow(c[1],2)); }
    /// @brief: Returns the normalized vector so the magnitude is 1
    vec2 normal() const { float m = mag(); return vec2(c[0]/m, c[1]/m); }
-   /// @brief: Normalizes the vector so the magnitude is 2
+   /// @brief: Normalizes the vector so the magnitude is 1
    void normalize() { float m = mag(); c[0] /= m; c[1] /= m; }
    /// @brief: Dot producto of 2 vectors. This is escencially the likeness of 2 normalized vectors
    float dot(const vec2& v) const { return ((this->c[0] * v.c[0]) + (this->c[1] * v.c[1])); }
@@ -112,7 +112,7 @@ struct vec3 {
    float mag() const { return std::sqrt(std::pow(c[0],2) + std::pow(c[1],2) + std::pow(c[2],2)); }
    /// @brief: Returns the normalized vector so the magnitude is 1
    vec3 normal() const { float m = mag(); return vec3(c[0]/m, c[1]/ m, c[2]/m); }
-   /// @brief: Normalizes the vector so the magnitude is 2
+   /// @brief: Normalizes the vector so the magnitude is 1
    void normalize() { float m = mag(); c[0] /= m; c[1] /= m; c[2] /= m; }
    /// @brief: Dot producto of 2 vectors. This is escencially the likeness of 2 normalized vectors
    float dot(const vec3& v) const { return ((this->c[0] * v.c[0]) + (this->c[1] * v.c[1]) + (this->c[2] * v.c[2])); }
@@ -202,7 +202,7 @@ struct vec4 {
    float mag() const { return std::sqrt(std::pow(c[0],2) + std::pow(c[1],2) + std::pow(c[2],2)); }
    /// @brief: Returns the normalized vector so the magnitude is 1
    vec4 normal() const { float m = mag(); return vec4(c[0]/m, c[1]/ m, c[2]/m, c[3]); }
-   /// @brief: Normalizes the vector so the magnitude is 2
+   /// @brief: Normalizes the vector so the magnitude is 1
    void normalize() { float m = mag(); c[0] /= m; c[1] /= m; c[2] /= m; }
    /// @brief: Dot producto of 2 vectors. This is escencially the likeness of 2 normalized vectors
    float dot(const vec4& v) const { return ((this->c[0] * v.c[0]) + (this->c[1] * v.c[1]) + (this->c[2] * v.c[2])+ (this->c[3] * v.c[3])); }
