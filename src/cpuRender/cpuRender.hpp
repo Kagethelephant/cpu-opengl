@@ -44,8 +44,8 @@ private:
       void perspectiveDivide() {v[0].screenPos.perspectiveDivide(); v[1].screenPos.perspectiveDivide(); v[2].screenPos.perspectiveDivide();}
 
       // Operator overloads for multiplying a whole triagle by a matrix (just multiplies the underlying vectors)
-      triangle3d operator * (const mat4x4& m) const {return triangle3d(this->v[0] * m, this->v[1] * m, this->v[2] * m);}
-      void operator *= (const mat4x4& m) { this->v[0] *= m; this->v[1] *= m; this->v[2] *= m; }
+      // triangle3d operator * (const mat4x4& m) const {return triangle3d(this->v[0] * m, this->v[1] * m, this->v[2] * m);}
+      // void operator *= (const mat4x4& m) { this->v[0] *= m; this->v[1] *= m; this->v[2] *= m; }
    };
 
    /// @brief: Reference to the sfml window that we will render to

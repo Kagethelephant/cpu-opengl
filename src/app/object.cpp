@@ -22,7 +22,7 @@
 //---------------------- CAMERA MOVEMENT ----------------------
 void camera::move(float x, float y, float z) {
    // Transform the world-space up vector by the camera's rotation
-   vec3 up = vec3(0,1,0) * matrix_transform(0, 0, 0, m_rotation[0], m_rotation[1], m_rotation[2]);
+   vec3 up = (matrix_transform(0, 0, 0, m_rotation[0], m_rotation[1], m_rotation[2]) * vec4(0,1,0,1)).xyz();
    // Move along camera's right vector
    // use cross product of up and forward vector to get the the right vector
    m_position += (m_direction.cross(up) * x);
@@ -36,8 +36,8 @@ void camera::move(float x, float y, float z) {
 
 void camera::rotate(float u, float v, float w) {
    m_rotation += vec3(u, v, w);
-   vec3 up = vec3(0,1,0) * matrix_transform(0, 0, 0, m_rotation[0], m_rotation[1], m_rotation[2]);
-   m_direction = vec3(0,0,-1) * matrix_transform(0, 0, 0, m_rotation[0], m_rotation[1],m_rotation[2]);
+   vec3 up = (matrix_transform(0, 0, 0, m_rotation[0], m_rotation[1], m_rotation[2]) * vec4(0,1,0,1)).xyz();
+   m_direction = (matrix_transform(0, 0, 0, m_rotation[0], m_rotation[1],m_rotation[2]) * vec3(0,0,-1)).xyz() ;
    // Updated view matrix will be referenced by renderer
    m_viewMatrix = matrix_view(matrix_pointAt(m_position, m_direction, up));
 }

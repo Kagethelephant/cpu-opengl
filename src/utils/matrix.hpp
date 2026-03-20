@@ -5,24 +5,7 @@
 #include <iostream>
 
 
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-// VECTOR / MATRIX CLASSES
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-
-/// @brief: Simple 4x4 matrix with multiplication overload
-struct mat4x4 {
-
-   float m[4][4] = {0.0f};
-   
-   // Overload for multiplying two matrices
-   mat4x4 operator * (const mat4x4 &m2) const {
-      mat4x4 matrix;
-      for (int i = 0; i < 4; i++)
-         for (int j = 0; j < 4; j++)
-            matrix.m[j][i] = this->m[j][0] * m2.m[0][i] + this->m[j][1] * m2.m[1][i] + this->m[j][2] * m2.m[2][i] + this->m[j][3] * m2.m[3][i];
-      return matrix;
-   }
-};
+//---------------------- VECTOR STRUCTS ----------------------
 
 
 /// @brief: 3d vector with operator overloads
@@ -43,14 +26,14 @@ struct vec2 {
    vec2(const vec2& other) : c{other.c[0], other.c[1]}, x(c[0]), y(c[1]) {}
    vec2& operator = (const vec2& other){if (this != &other) c = other.c; return *this;}
 
-   // Member Functions
-   //---------------------------------------------------------------------------------------------
+   // ---------- MEMBER FUNCTIONS
+
    /// @brief: returns the magnitude of the vector
-   float mag() const { return std::sqrt(std::pow(c[0],2) + std::pow(c[1],2)); }
+   float mag() const { return std::sqrt(c[0] * c[0] + c[1] * c[1]); }
    /// @brief: Returns the normalized vector so the magnitude is 1
-   vec2 normal() const { float m = mag(); return vec2(c[0]/m, c[1]/m); }
+   vec2 normal() const { float m = mag(); if (m==0) return *this; return vec2(c[0]/m, c[1]/m); }
    /// @brief: Normalizes the vector so the magnitude is 1
-   void normalize() { float m = mag(); c[0] /= m; c[1] /= m; }
+   void normalize() { float m = mag(); if (m!=0) c[0] /= m; c[1] /= m; }
    /// @brief: Dot producto of 2 vectors. This is escencially the likeness of 2 normalized vectors
    float dot(const vec2& v) const { return ((this->c[0] * v.c[0]) + (this->c[1] * v.c[1])); }
    // @brief: There is not necessarily a 2D cross product but you can use this to determine if a vector points to the left or right of another vector
@@ -58,8 +41,8 @@ struct vec2 {
    // @brief: Print the vector parameters
    void print() const {std::cout << "{" << c[0] << ", " << c[1] << "}" << std::endl;}
 
-   // Overload functions
-   //---------------------------------------------------------------------------------------------
+   // ---------- OVERLOADS
+
    //Subscript operator for compatability with opengl
    float& operator [] (int i) { return c.at(i);}
    float operator [] (int i) const { return c.at(i);}
@@ -106,14 +89,14 @@ struct vec3 {
    // Swizzle functions
    vec2 xy() const {return vec2(c[0], c[1]);}
 
-   // Member functions
-   //---------------------------------------------------------------------------------------------
+   // ---------- MEMBER FUNCTIONS
+
    /// @brief: returns the magnitude of the vector
-   float mag() const { return std::sqrt(std::pow(c[0],2) + std::pow(c[1],2) + std::pow(c[2],2)); }
+   float mag() const { return std::sqrt(c[0] * c[0] + c[1] * c[1] + c[2] * c[2]); }
    /// @brief: Returns the normalized vector so the magnitude is 1
-   vec3 normal() const { float m = mag(); return vec3(c[0]/m, c[1]/ m, c[2]/m); }
+   vec3 normal() const { float m = mag(); if (m==0) return *this; return vec3(c[0]/m, c[1]/ m, c[2]/m); }
    /// @brief: Normalizes the vector so the magnitude is 1
-   void normalize() { float m = mag(); c[0] /= m; c[1] /= m; c[2] /= m; }
+   void normalize() { float m = mag(); if (m!=0) c[0] /= m; c[1] /= m; c[2] /= m; }
    /// @brief: Dot producto of 2 vectors. This is escencially the likeness of 2 normalized vectors
    float dot(const vec3& v) const { return ((this->c[0] * v.c[0]) + (this->c[1] * v.c[1]) + (this->c[2] * v.c[2])); }
    // @brief: Cross product of 2 vectors that will return the normal vector of the plane created from the 2 vectors
@@ -121,8 +104,8 @@ struct vec3 {
    // @brief: Print the vector parameters
    void print() const {std::cout << "{" << c[0] << ", " << c[1] << ", " << c[2] << "}" << std::endl;}
 
-   // Operator overloads
-   //---------------------------------------------------------------------------------------------
+   // ---------- OVERLOADS
+
    //Subscript operator for compatability with opengl
    float& operator [] (int i) { return c.at(i);}
    float operator [] (int i) const { return c.at(i);}
@@ -139,27 +122,6 @@ struct vec3 {
    // Componentwise multiplication overload
    vec3 operator * (const vec3& v) {return vec3(this->c[0] * v.c[0], this->c[1] * v.c[1], this->c[2] * v.c[2]); }
 
-   // Overload for multiplying a vector against a matrix
-   vec3 operator * (const mat4x4& m) const {
-      vec3 v;
-      v.c[0]  = this->c[0] * m.m[0][0] + this->c[1] * m.m[1][0] + this->c[2] * m.m[2][0] + 1.0f * m.m[3][0];
-      v.c[1]  = this->c[0] * m.m[0][1] + this->c[1] * m.m[1][1] + this->c[2] * m.m[2][1] + 1.0f * m.m[3][1];
-      v.c[2]  = this->c[0] * m.m[0][2] + this->c[1] * m.m[1][2] + this->c[2] * m.m[2][2] + 1.0f * m.m[3][2];
-      float w = this->c[0] * m.m[0][3] + this->c[1] * m.m[1][3] + this->c[2] * m.m[2][3] + 1.0f * m.m[3][3];
-      return v;
-   }
-   
-   // Overload for multiplying a vector against a matrix
-   void operator *= (const mat4x4& m) {
-      vec3 v;
-      v.c[0]  = this->c[0] * m.m[0][0] + this->c[1] * m.m[1][0] + this->c[2] * m.m[2][0] + 1.0f * m.m[3][0];
-      v.c[1]  = this->c[0] * m.m[0][1] + this->c[1] * m.m[1][1] + this->c[2] * m.m[2][1] + 1.0f * m.m[3][1];
-      v.c[2]  = this->c[0] * m.m[0][2] + this->c[1] * m.m[1][2] + this->c[2] * m.m[2][2] + 1.0f * m.m[3][2];
-      float w = this->c[0] * m.m[0][3] + this->c[1] * m.m[1][3] + this->c[2] * m.m[2][3] + 1.0f * m.m[3][3];
-      this-> c[0] = v.c[0];
-      this-> c[1] = v.c[1];
-      this-> c[2] = v.c[2];
-   }
 };
 
 
@@ -196,14 +158,14 @@ struct vec4 {
    vec2 xy() const {return vec2(c[0], c[1]);}
    vec3 xyz() const {return vec3(c[0], c[1], c[2]);}
 
-   // Member functions
-   //---------------------------------------------------------------------------------------------
+   // ---------- MEMBER FUNCTIONS
+
    /// @brief: returns the magnitude of the vector
-   float mag() const { return std::sqrt(std::pow(c[0],2) + std::pow(c[1],2) + std::pow(c[2],2)); }
+   float mag() const { return std::sqrt(c[0] * c[0] + c[1] * c[1] + c[2] * c[2]); }
    /// @brief: Returns the normalized vector so the magnitude is 1
-   vec4 normal() const { float m = mag(); return vec4(c[0]/m, c[1]/ m, c[2]/m, c[3]); }
+   vec4 normal() const { float m = mag(); if (m==0) return *this; return vec4(c[0]/m, c[1]/ m, c[2]/m, c[3]); }
    /// @brief: Normalizes the vector so the magnitude is 1
-   void normalize() { float m = mag(); c[0] /= m; c[1] /= m; c[2] /= m; }
+   void normalize() { float m = mag(); if (m!=0) c[0] /= m; c[1] /= m; c[2] /= m; }
    /// @brief: Dot producto of 2 vectors. This is escencially the likeness of 2 normalized vectors
    float dot(const vec4& v) const { return ((this->c[0] * v.c[0]) + (this->c[1] * v.c[1]) + (this->c[2] * v.c[2])+ (this->c[3] * v.c[3])); }
    // @brief: Cross product of 2 vectors that will return the normal vector of the plane created from the 2 vectors
@@ -214,8 +176,8 @@ struct vec4 {
    void print() const {std::cout << "{" << c[0] << ", " << c[1] << ", " << c[2] << ", " << c[3] << "}" << std::endl;}
 
 
-   // Operator overloads
-   //---------------------------------------------------------------------------------------------
+   // ---------- OVERLOADS
+
    //Subscript operator for compatability with opengl
    float& operator [] (int i) { return c.at(i);}
    float operator [] (int i) const { return c.at(i);}
@@ -232,36 +194,45 @@ struct vec4 {
    // Dot product overloa
    vec4 operator * (const vec4& v) {return vec4(this->c[0] * v.c[0], this->c[1] * v.c[1], this->c[2] * v.c[2], this->c[3] * v.c[3]); }
 
-   // Overload for multiplying a vector against a matrix
-   vec4 operator * (const mat4x4& m) const {
-      vec4 v;
-      v.c[0] = this->c[0] * m.m[0][0] + this->c[1] * m.m[1][0] + this->c[2] * m.m[2][0] + this->c[3] * m.m[3][0];
-      v.c[1] = this->c[0] * m.m[0][1] + this->c[1] * m.m[1][1] + this->c[2] * m.m[2][1] + this->c[3] * m.m[3][1];
-      v.c[2] = this->c[0] * m.m[0][2] + this->c[1] * m.m[1][2] + this->c[2] * m.m[2][2] + this->c[3] * m.m[3][2];
-      v.c[3] = this->c[0] * m.m[0][3] + this->c[1] * m.m[1][3] + this->c[2] * m.m[2][3] + this->c[3] * m.m[3][3];
-      return v;
-   }
-   
-   // Overload for multiplying a vector against a matrix
-   void operator *= (const mat4x4& m) {
-      vec4 v;
-      v.c[0] = this->c[0] * m.m[0][0] + this->c[1] * m.m[1][0] + this->c[2] * m.m[2][0] + this->c[3] * m.m[3][0];
-      v.c[1] = this->c[0] * m.m[0][1] + this->c[1] * m.m[1][1] + this->c[2] * m.m[2][1] + this->c[3] * m.m[3][1];
-      v.c[2] = this->c[0] * m.m[0][2] + this->c[1] * m.m[1][2] + this->c[2] * m.m[2][2] + this->c[3] * m.m[3][2];
-      v.c[3] = this->c[0] * m.m[0][3] + this->c[1] * m.m[1][3] + this->c[2] * m.m[2][3] + this->c[3] * m.m[3][3];
-      this-> c[0] = v.c[0];
-      this-> c[1] = v.c[1];
-      this-> c[2] = v.c[2];
-      this-> c[3] = v.c[3];
-   }
 };
 
 
 
 
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-// Matrix Functions
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+//---------------------- MATRIX STRUCT ----------------------
+
+/// @brief: Simple 4x4 matrix with multiplication overload
+struct mat4x4 {
+
+   float m[4][4] = {0.0f};
+   
+   // Overload for multiplying two matrices
+   mat4x4 operator*(const mat4x4& b) const {
+      mat4x4 r;
+      for (int i = 0; i < 4; i++) {         // column index of result
+         for (int j = 0; j < 4; j++) {     // row index of result
+            r.m[i][j] =
+               m[0][j] * b.m[i][0] +
+               m[1][j] * b.m[i][1] +
+               m[2][j] * b.m[i][2] +
+               m[3][j] * b.m[i][3];
+         }
+      }
+      return r;
+   }
+
+   vec4 operator*(const vec4& v) const {
+      vec4 r;
+      r.x = m[0][0]*v.x + m[1][0]*v.y + m[2][0]*v.z + m[3][0]*v.w;
+      r.y = m[0][1]*v.x + m[1][1]*v.y + m[2][1]*v.z + m[3][1]*v.w;
+      r.z = m[0][2]*v.x + m[1][2]*v.y + m[2][2]*v.z + m[3][2]*v.w;
+      r.w = m[0][3]*v.x + m[1][3]*v.y + m[2][3]*v.z + m[3][3]*v.w;
+      return r;
+   }
+};
+
+
+//---------------------- MATRIX GENERATORS ----------------------
 
 /// @brief: Creates a matrix that will move a vertex in 3D space to a position that reflects its
 /// position reletive to the camera view. Essentially moving the world around a camera instead 

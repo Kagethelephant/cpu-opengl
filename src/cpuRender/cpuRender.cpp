@@ -54,13 +54,14 @@ cpuRenderObject::cpuRenderObject(camera& cam) : m_camera{cam}, m_window{cam.getW
 
 void cpuRenderObject::render() {
    // Camera owns view and projection matrix since it also owns camera FOV, direction and position 
-   mat4x4 vp = m_camera.getViewMatrix() * m_camera.getProjectionMatrix();
+   mat4x4 p = m_camera.getProjectionMatrix();
+   mat4x4 v = m_camera.getViewMatrix();
 
    for (const object& obj : m_objects){
       const model& mod = obj.getModel();
      
       // Object owns scale and transformation matrix since it also owns object position, rotation and scale
-      mat4x4 m = obj.getScaleMatrix() * obj.getTransformMatrix();
+      mat4x4 m = obj.getTransformMatrix() * obj.getScaleMatrix();
 
       const std::vector<vertex>& modVertices = mod.getVertices();
       m_vertices.resize(modVertices.size());
@@ -72,13 +73,13 @@ void cpuRenderObject::render() {
          const vec4& aPos = modVert.screenPos;
          vertex newVert;
 
-         // ---------- VERTEX SHADER
+         //---------------------- VERTEX SHADER ----------------------
 
          newVert.uv = aTex;
-         newVert.fragPos = aPos * m;
-         newVert.screenPos = aPos * m * vp;
+         newVert.fragPos =  m * aPos;
+         newVert.screenPos = p * v * m * aPos;
 
-         // ---------- VERTEX SHADER
+         //---------------------- VERTEX SHADER ----------------------
         
          // Save the clip position (opengl does this automatically)
          newVert.clipPos = newVert.screenPos;
@@ -311,8 +312,8 @@ void cpuRenderObject::raster(const triangle3d& pr, const object& obj, const mode
                   }
                }
 
-               // ---------- FRAGMENT SHADER
 
+               //---------------------- FRAGMENT SHADER ----------------------
                float ambientStrength = 0.2;
                vec3 lightSum(0,0,0);
                vec4 sampleColor;
@@ -336,8 +337,7 @@ void cpuRenderObject::raster(const triangle3d& pr, const object& obj, const mode
                }
 
                vec4 fragColor = sampleColor * vec4(lightSum, 1.0f);
-
-               // ---------- FRAGMENT SHADER
+               //---------------------- FRAGMENT SHADER ----------------------
 
 
                m_pixelBuffer[index*4 + 0] = std::clamp(fragColor[0], 0.0f, 255.0f);

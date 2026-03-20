@@ -28,9 +28,9 @@ struct vertex {
    // W should be initialized to 1 for perspective divide
    vertex() : screenPos{0,0,0,1} {}
 
-   // Matrix multiplication operators (only multiplies by screenPos)
-   vertex operator * (const mat4x4& m) const{ vertex v = *this; v.screenPos *= m; return v;}
-   void operator *= (const mat4x4& m) { screenPos *= m;}
+   // // Matrix multiplication operators (only multiplies by screenPos)
+   // vertex operator * (const mat4x4& m) const{ vertex v = *this; v.screenPos *= m; return v;}
+   // void operator *= (const mat4x4& m) { screenPos *= m;}
 
    /// @brief: Linearly interpolate 2 vertices with scale t
    /// @param v2: second vertex to create line
