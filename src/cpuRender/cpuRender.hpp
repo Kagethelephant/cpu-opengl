@@ -10,12 +10,12 @@
 
 /// @brief: Takes mesh data from 3D objects, projects the 3D polygons to a 2D view in the 
 /// form of a pixel buffer to be drawn to an OpenGL FBO.
-class cpuRenderObject {
+class cpuRenderEngine {
 
 public:
    /// @brief: Create new CPU rendering engine
    /// @param cam: Reference to the window to be rendered to. Used to find resolution and SFML render target
-   cpuRenderObject(camera& cam);
+   cpuRenderEngine(camera& cam);
 
    /// @brief: Add object to draw when render function is called
    /// @param obj: object to load into mesh buffer

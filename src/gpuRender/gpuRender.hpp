@@ -18,11 +18,11 @@
 /// @brief: Loads and renders the meshes to the screen
 /// @param _width: Width of the rendering view (not always the same as window)
 /// @param _height: Height of the rendering view (not always the same as window)
-class gpuRenderObject {
+class gpuRenderEngine {
 
 public:
 
-   gpuRenderObject(camera& cam);
+   gpuRenderEngine(camera& cam);
 
    /// @brief: Shader program to render 3d objects
    GLuint shaderProgram3D;

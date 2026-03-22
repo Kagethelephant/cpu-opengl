@@ -69,7 +69,7 @@ int main(int argc, char* argv[]){
 
       //------------------- BIND OBJECTS AND LIGHTS TO RENDERERS ------------------------
       // Pass same camera, objects, and lights to both renderers to mirror screen output between the two
-      gpuRenderObject gpuRend(userCamera);
+      gpuRenderEngine gpuRend(userCamera);
       gpuRend.bindObject(yoshiObj);
       gpuRend.bindObject(arcanineObj);
       gpuRend.bindObject(teapotObj);
@@ -78,7 +78,7 @@ int main(int argc, char* argv[]){
       gpuRend.addLight(redLight);
       gpuRend.addLight(blueLight);
 
-      cpuRenderObject cpuRend(userCamera);
+      cpuRenderEngine cpuRend(userCamera);
       cpuRend.bindObject(yoshiObj);
       cpuRend.bindObject(arcanineObj);
       cpuRend.bindObject(teapotObj);

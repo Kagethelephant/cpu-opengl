@@ -20,7 +20,7 @@
 //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 // INTITIALIZE THE RENDERER
 //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-gpuRenderObject::gpuRenderObject(camera& cam) : m_camera{cam}, m_window{cam.getWindow()}{
+gpuRenderEngine::gpuRenderEngine(camera& cam) : m_camera{cam}, m_window{cam.getWindow()}{
    shaderProgram3D = createShaderProgram("../src/shaders/3d_vertex.glsl", "../src/shaders/3d_fragment.glsl");
 }
 
@@ -29,7 +29,7 @@ gpuRenderObject::gpuRenderObject(camera& cam) : m_camera{cam}, m_window{cam.getW
 // SETUP VAO FOR RENDERING
 //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
-void gpuRenderObject::bindObject(const object& obj){
+void gpuRenderEngine::bindObject(const object& obj){
   
    gpuMesh gpuObject(obj);
    const model& mod = obj.getModel();
@@ -86,7 +86,7 @@ void gpuRenderObject::bindObject(const object& obj){
 //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 // DRAW MODELS AT LOCATIONS DICTATED BY OBJECTS
 //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-void gpuRenderObject::render(){
+void gpuRenderEngine::render(){
 
    vec4 bgColor = hexColorToFloat(Color::Black);
    GLScopedFBO tempFBO(m_window.fbo);

@@ -16,7 +16,7 @@
 
 //---------------------- INITIALIZATION ----------------------
 
-cpuRenderObject::cpuRenderObject(camera& cam) : m_camera{cam}, m_window{cam.getWindow()}{
+cpuRenderEngine::cpuRenderEngine(camera& cam) : m_camera{cam}, m_window{cam.getWindow()}{
 
    m_resolution = vec2(m_window.fboWidth,m_window.fboHeight);
 
@@ -52,7 +52,7 @@ cpuRenderObject::cpuRenderObject(camera& cam) : m_camera{cam}, m_window{cam.getW
 
 //---------------------- 3D RENDER PIPELINE ----------------------
 
-void cpuRenderObject::render() {
+void cpuRenderEngine::render() {
    // Camera owns view and projection matrix since it also owns camera FOV, direction and position 
    mat4x4 p = m_camera.getProjectionMatrix();
    mat4x4 v = m_camera.getViewMatrix();
@@ -139,7 +139,7 @@ void cpuRenderObject::render() {
 
 //---------------------- TRIANGLE CLIPPING ----------------------
 
-void cpuRenderObject::clipTriangles() {
+void cpuRenderEngine::clipTriangles() {
    
    // Create a buffer to store clipped triangles
    std::vector<triangle3d> clippedBuffer;
@@ -209,7 +209,7 @@ void cpuRenderObject::clipTriangles() {
 
 //---------------------- FILL TRIANGLE ----------------------
 
-void cpuRenderObject::raster(const triangle3d& pr, const object& obj, const model::subMesh& mesh) {
+void cpuRenderEngine::raster(const triangle3d& pr, const object& obj, const model::subMesh& mesh) {
    // Bounding box triangle filling method with barycentric coordinates to interpolate 
    // between points. This is the trickiest part of the pipeline
    const vertex& v0 = pr.v[0];
@@ -375,11 +375,11 @@ void cpuRenderObject::raster(const triangle3d& pr, const object& obj, const mode
 
 //---------------------- HELPER FUNCTIONS ----------------------
 
-float cpuRenderObject::planeIntersect(const vec4& a, const vec4& b, const vec4& plane) {
+float cpuRenderEngine::planeIntersect(const vec4& a, const vec4& b, const vec4& plane) {
    return plane.dot(a) / (plane.dot(a) - plane.dot(b));
 }
 
-bool cpuRenderObject::backFaceCulling(const triangle3d& tri) {
+bool cpuRenderEngine::backFaceCulling(const triangle3d& tri) {
     // Use only X/Y in screen space.
     const vec2& a = tri.v[0].screenPos.xy();
     const vec2& b = tri.v[1].screenPos.xy();
@@ -390,7 +390,7 @@ bool cpuRenderObject::backFaceCulling(const triangle3d& tri) {
     return area < 0.0f;
 }
 
-int cpuRenderObject::wrap(int n, int max){
+int cpuRenderEngine::wrap(int n, int max){
    if (n >= max) n -= max;
    return n;
 }
