@@ -69,15 +69,16 @@ void cpuRenderObject::render() {
       // Load and apply vertex shader to model vertices
       for(int i=0; i<modVertices.size(); i ++){
          const vertex& modVert = modVertices[i];
-         const vec2& aTex = modVert.uv;
+         // Simulate OpenGL uniforms
+         const vec2& aTex = modVert.uv; 
          const vec4& aPos = modVert.screenPos;
          vertex newVert;
 
          //---------------------- VERTEX SHADER ----------------------
 
          newVert.uv = aTex;
-         newVert.fragPos =  m * aPos;
-         newVert.screenPos = p * v * m * aPos;
+         newVert.fragPos =  m * aPos;           // View position used in fragment shader for lighting
+         newVert.screenPos = p * v * m * aPos;  // Clip possition until perspective divide below
 
          //---------------------- VERTEX SHADER ----------------------
         
@@ -88,8 +89,8 @@ void cpuRenderObject::render() {
 
       
       for (const auto& mesh : mod.getSubMeshes()) {
-         m_primatives.clear();
-         m_primatives.reserve(mesh.indices.size()/3);
+         m_triangles.clear();
+         m_triangles.reserve(mesh.indices.size()/3);
 
          // ---------- PRIMATIVE ASSEMBLY
          for(int i=0; i< mesh.indices.size(); i += 3){
@@ -97,14 +98,14 @@ void cpuRenderObject::render() {
             int i0 = mesh.indices[i];
             int i1 = mesh.indices[i+1];
             int i2 = mesh.indices[i+2];
-            m_primatives.emplace_back(m_vertices[i0],m_vertices[i1],m_vertices[i2]);
+            m_triangles.emplace_back(m_vertices[i0],m_vertices[i1],m_vertices[i2]);
          }
 
          // ---------- TRIANGLE CLIPPING
          clipTriangles();
 
-         for(int i=0; i< m_primatives.size(); i++) {
-            triangle3d& p = m_primatives[i];
+         for(int i=0; i< m_triangles.size(); i++) {
+            triangle3d& p = m_triangles[i];
 
             // ---------- PERSPECTIVE DIVIDE
             p.perspectiveDivide();
@@ -120,7 +121,7 @@ void cpuRenderObject::render() {
             // Do not raster if winding is incorrect
             if(!backFaceCulling(p)){ raster(p, obj, mesh);}
          }
-         m_primatives.clear();
+         m_triangles.clear();
       }
    }
 
@@ -140,64 +141,67 @@ void cpuRenderObject::render() {
 
 void cpuRenderObject::clipTriangles() {
    
-   // Create buffer to hold triangles that need to go through the split function and 
-   // a buffer of triangles that have already been through the split function
-   std::vector<triangle3d> splitBuffer;
-   splitBuffer.reserve(m_primatives.size() * 2);
+   // Create a buffer to store clipped triangles
+   std::vector<triangle3d> clippedBuffer;
+   clippedBuffer.reserve(m_triangles.size() * 2);
 
    for (vec4& plane : m_planes) {
-      for(triangle3d& t : m_primatives) {
+      for(triangle3d& t : m_triangles) {
 
-         // For conciseness check what points are out of the current plane ahead of time
          // Dot product of plane in Ax + Bx + Cz + D form and point will tell you what side 
-         // the plane it is on. negative and positive on opisite sides and 0 on the plane
+         // the plane it is on. negative = outside plane,  positive = inside place, and 0 = on plane
          bool clipped[3] = {
             plane.dot(t.v[0].clipPos) < 0.0f,
             plane.dot(t.v[1].clipPos) < 0.0f,
             plane.dot(t.v[2].clipPos) < 0.0f};
 
+         // If no points are clipped against this plane pass the triangle unaltered to the the next step
+         if (clipped[0]+clipped[1]+clipped[2] == 0){clippedBuffer.push_back(t); continue;}
          // If all of the points are not clipped by this plane then pass along the triangle to the next step
-         if (clipped[0]+clipped[1]+clipped[2] == 0){splitBuffer.push_back(t); continue;}
          if (clipped[0]+clipped[1]+clipped[2] == 3){ continue;}
 
          // Cycle through all of the points to find the clipped points
          for(int i=0; i<3; i++){
-            // Get the position of the next and last point clockwise from the current point
+            // Get the position of the next and last point counter-clockwise from the current point
             int next = wrap(i+1,3);
             int last = wrap(i+2,3);
-            // We make sure the last point is not clipped so we exclude triangles with all points out of the plane
+
             if (clipped[i] and not clipped[last]){
-               // If there are 2 points and they are the current and next point
+               // If i, and the next point are clipped and the last point is not, we now know
+               // there are 2 points clipped and have their winding!
                if (clipped[next]){
-                  // Find new points where the edges of the triangles intercect the plane
+                  // Create new points where the triangle clips against the plane
                   float t1 = planeIntersect(t.v[i].screenPos, t.v[last].screenPos, plane);
                   float t2 = planeIntersect(t.v[next].screenPos, t.v[last].screenPos, plane);
                   // Lerp all vertex attributes for new triangle points
                   vertex p1 = t.v[i].lerp(t.v[last], t1);
                   vertex p2 = t.v[next].lerp(t.v[last], t2);
 
-                  splitBuffer.emplace_back(p1,p2,t.v[last]);
+                  // Create new triangle with the new points and add it to the clip buffer
+                  // new triangle will go through this loop for the remaining planes
+                  clippedBuffer.emplace_back(p1,p2,t.v[last]);
                   break;
                }
-               // If there is only one point and it is the current point
+               // If i is clipped and the others are not
                else {
-                  // Find new points where the edges of the triangles intercect the plane
+                  // Create new points where the triangle clips against the plane
                   float t1 = planeIntersect(t.v[i].screenPos, t.v[last].screenPos, plane);
                   float t2 = planeIntersect(t.v[i].screenPos, t.v[next].screenPos, plane);
                   // Lerp all vertex attributes for new triangle points
                   vertex p1 = t.v[i].lerp(t.v[last], t1);
                   vertex p2 = t.v[i].lerp(t.v[next], t2);
 
-                  splitBuffer.emplace_back(p1,p2,t.v[next]);
-                  splitBuffer.emplace_back(p1,t.v[next],t.v[last]);
+                  // Clipping one point creates a quad, so we will need 2 triangles
+                  clippedBuffer.emplace_back(p1,p2,t.v[next]);
+                  clippedBuffer.emplace_back(p1,t.v[next],t.v[last]);
                   break;
                }
             }
          }
       }
-      // Pass triangles from the working buffer back into the loop for the next plane (and clear working buffer)
-      m_primatives.swap(splitBuffer);
-      splitBuffer.clear();
+      // Pass triangles from the working buffer back into the loop to clip against the next plane
+      m_triangles.swap(clippedBuffer);
+      clippedBuffer.clear();
    }
 
 }
@@ -269,17 +273,21 @@ void cpuRenderObject::raster(const triangle3d& pr, const object& obj, const mode
    // ---------- RASTER LOOP
 
    for (int y = ymin; y <= ymax; ++y){
+
+      // If its the sart of the new row, the index will be the row index (for 1 dimmensional array)
       float alphaXY = alphaY;
       float betaXY  = betaY;
       float gammaXY = gammaY;
 
       for (int x = xmin; x <= xmax; ++x){
 
+         // The pixel is inside the triangle
          if (alphaXY >= 0.0f && betaXY >= 0.0f && gammaXY >= 0.0f){
 
-            float depth = (alphaXY * clipZ0 + betaXY  * clipZ1 + gammaXY * clipZ2) * 0.5 + 0.5;
             int index = x + y * m_resolution.x;
 
+            // Make sure we are not drawing over fragments closer to the camera
+            float depth = alphaXY * clipZ0 + betaXY  * clipZ1 + gammaXY * clipZ2;
             if (depth <= m_zBuffer[index]){
                
                // Perspective-correct attribute reconstruction
@@ -314,32 +322,35 @@ void cpuRenderObject::raster(const triangle3d& pr, const object& obj, const mode
 
 
                //---------------------- FRAGMENT SHADER ----------------------
+
                float ambientStrength = 0.2;
                vec3 lightSum(0,0,0);
                vec4 sampleColor;
 
 
                for (const light& l : m_lights){
+                  // Calculating normal per fragment is too expensive for CPU rasterization, so this is done per triangle
                   // vec3 normal = dFdx.cross(dFdy).normal(); --- Calculated above
                   vec3 lightDir = (l.position - fragPos).normal();
-
+                  
+                  // Ambient is basically a min light value for the fragment
                   vec3 ambient = l.color * 0.2f;
+                  // Diffuse is scaled based on how much the triangle is pointing at the light
                   vec3 diffuse = l.color * std::max(normal.dot(lightDir), 0.0f);
 
                   lightSum += diffuse + ambient;
                }
 
-               if (mesh.textured) {
-                  sampleColor = texColor;
-               }
-               else {
-                  sampleColor = hexColorToRGB(obj.getColor());
-               }
+               // If there is no texture draw as solid color
+               if (mesh.textured) sampleColor = texColor;
+               else sampleColor = hexColorToRGB(obj.getColor());
 
+               // Multiply the light by the sample color to shade object
                vec4 fragColor = sampleColor * vec4(lightSum, 1.0f);
+
                //---------------------- FRAGMENT SHADER ----------------------
 
-
+               // Put pixel
                m_pixelBuffer[index*4 + 0] = std::clamp(fragColor[0], 0.0f, 255.0f);
                m_pixelBuffer[index*4 + 1] = std::clamp(fragColor[1], 0.0f, 255.0f);
                m_pixelBuffer[index*4 + 2] = std::clamp(fragColor[2], 0.0f, 255.0f);
@@ -348,10 +359,12 @@ void cpuRenderObject::raster(const triangle3d& pr, const object& obj, const mode
                m_zBuffer[index] = depth;
             }
          }
+         // Move 1 pixel to the right
          alphaXY += alphaDx;
          betaXY  += betaDx;
          gammaXY += gammaDx;
       }
+      // Move one pixel row
       alphaY += alphaDy;
       betaY  += betaDy;
       gammaY += gammaDy;

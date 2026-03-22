@@ -23,12 +23,12 @@ void main()
 
    for(int i = 0; i < lightCount; i ++){
 
-      // Calculate the triangle face normal and light direction 
       vec3 normal = normalize(cross(dFdx(fragPos), dFdy(fragPos)));
       vec3 lightDir = normalize(lightPos[i] - fragPos); 
 
-      // Calculate ambient and diffuse lighting for this light
+      // Ambient is basically a min light value for the fragment
       vec3 ambient = ambientStrength * lightCol[i];
+      // Diffuse is scaled based on how much the triangle is pointing at the light
       vec3 diffuse = max(dot(normal, lightDir), 0.0) * lightCol[i];
 
       // Sum light contributions from all lights
