@@ -35,8 +35,7 @@ int main(int argc, char* argv[]){
       double posSpeed = 10.0f; // Position units / sec
       double rotSpeed = 3.0f;  // Radians / sec
 
-      textRenderObject text(programWindow);
-      text.loadFont("../resources/font/novem___.ttf");
+      textRenderEngine text(programWindow, "../resources/font/novem___.ttf");
 
 
       //------------------- CREATE MODELS, OBJECTS AND LIGHTS ------------------------

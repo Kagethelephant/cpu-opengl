@@ -1,7 +1,6 @@
 #pragma once
 // OpenGl Library
 #include <glad/glad.h>
-#include <GL/gl.h>
 #include <GLFW/glfw3.h>
 // Standard Libraries
 #include <vector>
@@ -9,45 +8,60 @@
 // Program Headers
 #include "utils/data.hpp"
 #include "window.hpp"
-#include <shaders/shader.hpp>
+#include "shaders/shader.hpp"
 #include "utils/matrix.hpp"
 // Freetype Library
 #include <ft2build.h>
 #include FT_FREETYPE_H
 
 
-
-class textRenderObject {
+/// @brief: Simple text engine used to render text to window. After engine is created text can be printed
+/// to the screen using the RenderText function
+class textRenderEngine {
 
 public:
-   textRenderObject(window& _win);
-   ~textRenderObject();
+   
+   /// @brief: Create new text engine
+   /// @param win: Window to draw to (using FBO)
+   /// @param fontFile: filepath to the font to use for this engine 
+   textRenderEngine(window& win, const char* fontFile);
+   ~textRenderEngine();
+
+   /// @brief: Render text to the window attached to this text engine
+   /// @param text: String to be rendered to the screen
+   /// @param x: X position on screen to render text
+   /// @param y: Y position on screen to render text (top-left origin)
+   /// @param col: Color to draw text (default: White)
+   void RenderText(std::string text, float x, float y, Color col = Color::White);
 
 
-   FT_Library library;
+private:
 
-   GLuint vao;
-   GLuint vbo;
+   window& m_window;
+   FT_Library m_library;
 
-   window& gl_window;
+   /// @brief: Stores the font face for the engine 
+   /// (engine is intended to be simple and does not support multiple font faces)
+   FT_Face m_fontFace;
 
-   GLuint shaderProgramText;
-
-   std::vector<FT_Face> fontFaces;
-
-   std::vector<GLfloat> vertices;
-   void loadFont(const char * filepath);
-
+   /// @brief: Groups the OpenGL texture its size and the character bearing and advance
    struct character{
       GLuint textureID;
       vec2 size;
-      vec2 bearing;
-      GLuint advance;
+      vec2 bearing;  // Position from the top-left of the theoretical pen position
+      int advance;   // Distance between this character and the next
    };
-   void RenderText(std::string text, float x, float y, Color col = Color::White);
 
-   std::map<char, character> characters;
-   float quad[6][4];
+   /// @brief: Maps ASCII chars (from 32-128) to their corresponding character struct / texture
+   std::map<char, character> m_characters;
 
-private:
+
+   /// @brief: Vertices that make up the quad used to draw characters (updated per character)
+   std::vector<GLfloat> m_vertices;
+
+   /// @brief: Shader program made specifically to draw characters to a quad
+   GLuint m_shaderProgramText;
+
+   GLuint m_vao;
+   GLuint m_vbo;
 };

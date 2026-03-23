@@ -9,10 +9,6 @@
 
 
 
-// Constant max number of lights (this needs to match 3d frag shader constant MAX_LIGHTS)
-constexpr unsigned int MAX_LIGHTS = 32;
-
-
 
 //---------------------- VERTEX ----------------------
 

@@ -1,161 +1,144 @@
 #pragma once
 #include <glad/glad.h>
 
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-// Viewport RAII
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+// RAII wrappers are used to maintain OpenGL state. Doing this manually in the code can add
+// a lot of lines when you are changing alot of states, saving previous states and resetting those states.
+// this also increases the likelyhood of state leaks. using RAII wrappers for each state change ensures that
+// state changes are only oersistant for the scope they are created in.
+
+//---------------------- VIEWPORT RAII ----------------------
 struct GLScopedViewport {
+   // This pattern is used for all RAII wrappers so only this function is commented
    GLint oldViewport[4];
-   GLScopedViewport(GLint x, GLint y, GLsizei w, GLsizei h) {
+   // Upon creation store the previous GL state and set the new GL state
+   explicit GLScopedViewport(GLint x, GLint y, GLsizei w, GLsizei h) {
       glGetIntegerv(GL_VIEWPORT, oldViewport);
       glViewport(x, y, w, h);
    }
-
-   // Non-copyable
+   // Make the struct non-copyable so it cannot leave the scope
    GLScopedViewport(const GLScopedViewport&) = delete;
    GLScopedViewport& operator=(const GLScopedViewport&) = delete;
 
+   // Make the struct non-movable so it cannot leave the scope
+   GLScopedViewport(GLScopedViewport&&) = delete;
+   GLScopedViewport& operator=(GLScopedViewport&&) = delete;
+
+   // Upon deletion reset the state. This ensures the state is only changed for the scope the wrapper was created
    ~GLScopedViewport() { glViewport(oldViewport[0], oldViewport[1], oldViewport[2], oldViewport[3]); }
 };
 
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-// VAO RAII
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+//---------------------- VAO RAII ----------------------
 struct GLScopedVAO {
    GLint oldVAO;
-   GLScopedVAO(GLuint vao) {
+   explicit GLScopedVAO(GLuint vao) {
       glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &oldVAO);
       glBindVertexArray(vao);
    }
 
-   // Non-copyable
    GLScopedVAO(const GLScopedVAO&) = delete;
    GLScopedVAO& operator=(const GLScopedVAO&) = delete;
+
+   GLScopedVAO(GLScopedVAO&&) = delete;
+   GLScopedVAO& operator=(GLScopedVAO&&) = delete;
 
    ~GLScopedVAO() { glBindVertexArray(oldVAO); }
 };
 
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-// VBO RAII
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+//---------------------- VBO RAII ----------------------
 struct GLScopedVBO {
    GLint oldVBO;
-   GLScopedVBO(GLuint vbo) {
+   explicit GLScopedVBO(GLuint vbo) {
       glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &oldVBO);
       glBindBuffer(GL_ARRAY_BUFFER, vbo);
    }
 
-   // Non-copyable
    GLScopedVBO(const GLScopedVBO&) = delete;
    GLScopedVBO& operator=(const GLScopedVBO&) = delete;
+
+   GLScopedVBO(GLScopedVBO&&) = delete;
+   GLScopedVBO& operator=(GLScopedVBO&&) = delete;
 
    ~GLScopedVBO() { glBindBuffer(GL_ARRAY_BUFFER, oldVBO); }
 };
 
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-// EBO RAII (element buffer)
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+//---------------------- EBO RAII ----------------------
 struct GLScopedEBO {
    GLint oldEBO;
-   GLScopedEBO(GLuint ebo) {
+   explicit GLScopedEBO(GLuint ebo) {
       glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &oldEBO);
       glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
    }
 
-   // Non-copyable
    GLScopedEBO(const GLScopedEBO&) = delete;
    GLScopedEBO& operator=(const GLScopedEBO&) = delete;
+
+   GLScopedEBO(GLScopedEBO&&) = delete;
+   GLScopedEBO& operator=(GLScopedEBO&&) = delete;
 
    ~GLScopedEBO() { glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, oldEBO); }
 };
 
 
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-// FBO RAII
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+//---------------------- FBO RAII ----------------------
 struct GLScopedFBO {
    GLint oldFBO;
-   GLScopedFBO(GLuint fbo) {
+   explicit GLScopedFBO(GLuint fbo) {
       glGetIntegerv(GL_FRAMEBUFFER_BINDING, &oldFBO);
       glBindFramebuffer(GL_FRAMEBUFFER, fbo);
    }
 
-   // Non-copyable
    GLScopedFBO(const GLScopedFBO&) = delete;
    GLScopedFBO& operator=(const GLScopedFBO&) = delete;
+
+   GLScopedFBO(GLScopedFBO&&) = delete;
+   GLScopedFBO& operator=(GLScopedFBO&&) = delete;
 
    ~GLScopedFBO() { glBindFramebuffer(GL_FRAMEBUFFER, oldFBO); }
 };
 
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-// Cull face RAII
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+//---------------------- CULL-FACE RAII ----------------------
 struct GLScopedCullFace {
-   GLboolean oldEnabled;
-   GLint oldMode;
-   GLScopedCullFace(GLenum mode) {
-      oldEnabled = glIsEnabled(GL_CULL_FACE);
-      glGetIntegerv(GL_CULL_FACE_MODE, &oldMode);
-      glEnable(GL_CULL_FACE);
+   GLint previous;
+   explicit GLScopedCullFace(GLenum mode) {
+      glGetIntegerv(GL_CULL_FACE_MODE, &previous);
       glCullFace(mode);
    }
 
-   // Non-copyable
    GLScopedCullFace(const GLScopedCullFace&) = delete;
    GLScopedCullFace& operator=(const GLScopedCullFace&) = delete;
 
-   ~GLScopedCullFace() {
-      if (!oldEnabled) glDisable(GL_CULL_FACE);
-      else glCullFace(oldMode);
-   }
+   GLScopedCullFace(GLScopedCullFace&&) = delete;
+   GLScopedCullFace& operator=(GLScopedCullFace&&) = delete;
+
+   ~GLScopedCullFace() { glCullFace(previous); }
 };
 
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-// Depth test RAII
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-struct GLScopedDepthTest {
-   GLboolean oldEnabled;
-   GLScopedDepthTest(bool enable = true) {
-      oldEnabled = glIsEnabled(GL_DEPTH_TEST);
-      if (enable) glEnable(GL_DEPTH_TEST);
-      else glDisable(GL_DEPTH_TEST);
-   }
-   // Non-copyable
-   GLScopedDepthTest(const GLScopedDepthTest&) = delete;
-   GLScopedDepthTest& operator=(const GLScopedDepthTest&) = delete;
 
-   ~GLScopedDepthTest() {
-      if (oldEnabled) glEnable(GL_DEPTH_TEST);
-      else glDisable(GL_DEPTH_TEST);
-   }
-};
-
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-// Shader Program RAII
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+//---------------------- SHADER PROGRAM RAII ----------------------
 struct GLScopedProgram {
    GLint previous = 0;
-
    explicit GLScopedProgram(GLuint program) {
       glGetIntegerv(GL_CURRENT_PROGRAM, &previous);
       glUseProgram(program);
    }
 
-   // Non-copyable
    GLScopedProgram(const GLScopedProgram&) = delete;
    GLScopedProgram& operator=(const GLScopedProgram&) = delete;
 
-   ~GLScopedProgram() {
-      glUseProgram(previous);
-   }
+   GLScopedProgram(GLScopedProgram&&) = delete;
+   GLScopedProgram& operator=(GLScopedProgram&&) = delete;
+
+   ~GLScopedProgram() { glUseProgram(previous); }
 };
 
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-// Shader Program RAII
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+//---------------------- 2D TEXTURE RAII ----------------------
 struct GLScopedTexture2D {
    GLint previous = 0;
-
    explicit GLScopedTexture2D(GLuint tex) {
       glGetIntegerv(GL_TEXTURE_BINDING_2D, &previous);
       glBindTexture(GL_TEXTURE_2D, tex);
@@ -164,21 +147,19 @@ struct GLScopedTexture2D {
    GLScopedTexture2D(const GLScopedTexture2D&) = delete;
    GLScopedTexture2D& operator=(const GLScopedTexture2D&) = delete;
 
-   ~GLScopedTexture2D() {
-      glBindTexture(GL_TEXTURE_2D, previous);
-   }
+   GLScopedTexture2D(GLScopedTexture2D&&) = delete;
+   GLScopedTexture2D& operator=(GLScopedTexture2D&&) = delete;
+
+   ~GLScopedTexture2D() { glBindTexture(GL_TEXTURE_2D, previous); }
 };
 
 
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-// Capability RAII
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+//---------------------- CAPABILITY RAII ----------------------
 struct GLScopedCapability
 {
    GLenum cap;
    GLboolean wasEnabled;
-
-   GLScopedCapability(GLenum capability, bool enable) : cap(capability){
+   explicit GLScopedCapability(GLenum capability, bool enable) : cap(capability){
       wasEnabled = glIsEnabled(cap);
       if (enable) glEnable(cap);
       else glDisable(cap);
@@ -187,6 +168,9 @@ struct GLScopedCapability
    GLScopedCapability(const GLScopedCapability&) = delete;
    GLScopedCapability& operator=(const GLScopedCapability&) = delete;
 
+   GLScopedCapability(GLScopedCapability&&) = delete;
+   GLScopedCapability& operator=(GLScopedCapability&&) = delete;
+
    ~GLScopedCapability(){
       if (wasEnabled) glEnable(cap);
       else glDisable(cap);
@@ -194,16 +178,11 @@ struct GLScopedCapability
 };
 
 
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-// Blend Function RAII
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-struct GLScopedBlendFunc
-{
+//---------------------- BLEND FUNCTION RAII ----------------------
+struct GLScopedBlendFunc{
    GLint srcRGB, dstRGB;
    GLint srcAlpha, dstAlpha;
-
-   GLScopedBlendFunc(GLenum src, GLenum dst)
-   {
+   explicit GLScopedBlendFunc(GLenum src, GLenum dst){
       glGetIntegerv(GL_BLEND_SRC_RGB,   &srcRGB);
       glGetIntegerv(GL_BLEND_DST_RGB,   &dstRGB);
       glGetIntegerv(GL_BLEND_SRC_ALPHA, &srcAlpha);
@@ -215,32 +194,45 @@ struct GLScopedBlendFunc
    GLScopedBlendFunc(const GLScopedBlendFunc&) = delete;
    GLScopedBlendFunc& operator=(const GLScopedBlendFunc&) = delete;
 
-   ~GLScopedBlendFunc()
-   {
-      glBlendFuncSeparate(
-         srcRGB, dstRGB,
-         srcAlpha, dstAlpha
-      );
-   }
+   GLScopedBlendFunc(GLScopedBlendFunc&&) = delete;
+   GLScopedBlendFunc& operator=(GLScopedBlendFunc&&) = delete;
+
+   ~GLScopedBlendFunc(){ glBlendFuncSeparate(srcRGB, dstRGB, srcAlpha, dstAlpha); }
 };
 
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-// Active Texture RAII
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+//---------------------- ACTIVE TEXTURE RAII ----------------------
 struct GLScopedActiveTexture {
    GLint previous;
-
-   GLScopedActiveTexture(GLenum newUnit) {
-      glGetIntegerv(GL_ACTIVE_TEXTURE, &previous); // save current
-      glActiveTexture(newUnit);                    // switch to new
+   explicit GLScopedActiveTexture(GLenum newUnit) {
+      glGetIntegerv(GL_ACTIVE_TEXTURE, &previous);
+      glActiveTexture(newUnit);
    }
 
    GLScopedActiveTexture(const GLScopedActiveTexture&) = delete;
    GLScopedActiveTexture& operator=(const GLScopedActiveTexture&) = delete;
 
-   // Destructor: restore previous active texture unit
-   ~GLScopedActiveTexture() {
-      glActiveTexture(previous);
+   GLScopedActiveTexture(GLScopedActiveTexture&&) = delete;
+   GLScopedActiveTexture& operator=(GLScopedActiveTexture&&) = delete;
+
+   ~GLScopedActiveTexture() { glActiveTexture(previous); }
+};
+
+
+//---------------------- UNPACK ALIGNMENT RAII ----------------------
+struct GLScopedUnpackAlignment {
+   GLint previous;
+
+   explicit GLScopedUnpackAlignment(GLint alignment) {
+      glGetIntegerv(GL_UNPACK_ALIGNMENT, &previous);
+      glPixelStorei(GL_UNPACK_ALIGNMENT, alignment);
    }
 
+   GLScopedUnpackAlignment(const GLScopedUnpackAlignment&) = delete;
+   GLScopedUnpackAlignment& operator=(const GLScopedUnpackAlignment&) = delete;
+
+   GLScopedUnpackAlignment(GLScopedUnpackAlignment&&) = delete;
+   GLScopedUnpackAlignment& operator=(GLScopedUnpackAlignment&&) = delete;
+
+   ~GLScopedUnpackAlignment() { glPixelStorei(GL_UNPACK_ALIGNMENT, previous); }
 };

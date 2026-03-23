@@ -1,48 +1,34 @@
 #include "gpuRender.hpp"
+// Program headers
 #include "RAIIWrapper.hpp"
 #include "utils/data.hpp"
 #include "utils/matrix.hpp"
 #include "window.hpp"
 #include "app/object.hpp"
-#include "shaders/shader.hpp"
-
-#include <algorithm>
-#include <cstdint>
+// OpenGL
 #include <glad/glad.h>
-#include <GL/gl.h>
 #include <GLFW/glfw3.h>
-
-#include <string>
-#include <sys/types.h>
+// Std Libraries
 #include <vector>
 
 
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-// INTITIALIZE THE RENDERER
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-gpuRenderEngine::gpuRenderEngine(camera& cam) : m_camera{cam}, m_window{cam.getWindow()}{
-   shaderProgram3D = createShaderProgram("../src/shaders/3d_vertex.glsl", "../src/shaders/3d_fragment.glsl");
-}
 
-
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-// SETUP VAO FOR RENDERING
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 void gpuRenderEngine::bindObject(const object& obj){
-  
-   gpuMesh gpuObject(obj);
+ 
+   gpuObject gpuObject(obj);
    const model& mod = obj.getModel();
+
+   // Create VAO and VBO. Vertices are stored per object as 3 floats for position and 2 floats for UV
    GLuint& vao = gpuObject.vao;
    GLuint& vbo = gpuObject.vbo;
-
    glGenBuffers(1, &vbo);
    glGenVertexArrays(1, &vao);  
-   // Setup the VBO using the VAO
    GLScopedVAO tempVAO(vao);
    GLScopedVBO tempVBO(vbo);
+
+   // Need raw vertices from model because the VAO expects contigous memory
    glBufferData(GL_ARRAY_BUFFER, mod.getVerticesRaw().size() * sizeof(GLfloat), mod.getVerticesRaw().data(), GL_STATIC_DRAW);
-   // 1) Shader layout location, 2) Qty of vert attributes, 3) Size of attribute, 4) normaliize btwn -1 to 1, 5)span btwn verts in bytes, 6) start of buffer
    // positions at location 0
    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
    glEnableVertexAttribArray(0);
@@ -53,74 +39,64 @@ void gpuRenderEngine::bindObject(const object& obj){
 
    for (const auto& mesh : mod.getSubMeshes()) {
       gpuSubMesh gpuSub;
-      GLuint& ebo = gpuSub.ebo;
-      GLuint& tex = gpuSub.tex;
 
       gpuSub.textured = mesh.textured;
-
       gpuSub.indiceCount = mesh.indices.size();
 
+      // Create EBO and Texture. These are unique to object submesh
+      GLuint& ebo = gpuSub.ebo;
+      GLuint& tex = gpuSub.tex;
       glGenBuffers(1, &gpuSub.ebo);
       glGenTextures(1, &gpuSub.tex);
-
-
-      GLenum format = (mesh.tex.channels == 4) ? GL_RGBA : GL_RGB;
-
+      GLScopedEBO tempEBO(ebo);
       GLScopedTexture2D tempTex(tex);
+
+      // Create EBO from the subMesh indices (these will still point to vertices in the object VAO)
+      glBufferData(GL_ELEMENT_ARRAY_BUFFER, mesh.indices.size() * sizeof(uint32_t), mesh.indices.data(), GL_STATIC_DRAW);
+
+      // Format for 4 channel color or 3 channel color (alpha or no alpha)
+      GLenum format = (mesh.tex.channels == 4) ? GL_RGBA : GL_RGB;
+      // Create texture on the GPU and load in the submesh texture data
       glTexImage2D(GL_TEXTURE_2D, 0, format, mesh.tex.w, mesh.tex.h, 0, format, GL_UNSIGNED_BYTE, mesh.tex.data);
       glGenerateMipmap(GL_TEXTURE_2D);
-
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-      GLScopedEBO tempEBO(ebo);
-      glBufferData(GL_ELEMENT_ARRAY_BUFFER, mesh.indices.size() * sizeof(uint32_t), mesh.indices.data(), GL_STATIC_DRAW);
-
       gpuObject.subMeshes.push_back(gpuSub);
    }
-   meshes.push_back(gpuObject);
+   m_objects.push_back(gpuObject);
 }
 
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-// DRAW MODELS AT LOCATIONS DICTATED BY OBJECTS
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+
+
 void gpuRenderEngine::render(){
 
+   // Set OpenGL states that are agnostic of object or submesh 
+   GLScopedFBO tempFBO(m_window.fbo);                                            // Window FBO to draw to
+   GLScopedViewport tempViewPort(0, 0, m_window.fboWidth, m_window.fboHeight);   // Viewport matching FBO size
+   GLScopedProgram tempProgram(m_shaderProgram3D);                               // 3D rendering shader program
+   GLScopedCapability tempCullEnable(GL_CULL_FACE,true);                         // Backface culling enable
+   GLScopedCullFace tempCullMode(GL_BACK);                                       // Ensure back face is culled rather than front
+   GLScopedCapability tempDepthEnable(GL_DEPTH_TEST, true);                      // Depth buffer test
+
+   // Clear the FBO to remove what was rendered last frame
    vec4 bgColor = hexColorToFloat(Color::Black);
-   GLScopedFBO tempFBO(m_window.fbo);
-   GLScopedViewport tempViewPort(0, 0, m_window.fboWidth, m_window.fboHeight);
-   GLScopedProgram tempProgram(shaderProgram3D);
    glClearColor(bgColor[0],bgColor[1],bgColor[2],bgColor[3]);
    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-   GLScopedCapability tempCullEnable(GL_CULL_FACE,true);
-   GLScopedCullFace tempCullMode(GL_BACK);
-   GLScopedCapability tempDepthEnable(GL_DEPTH_TEST, true);
+   // Tell GPU how many lights we have so it does not have to itterate to MAX_LIGHTS each fragment
+   int lightCount = std::min(MAX_LIGHTS, (unsigned int)m_lightPositions.size() / 3);
 
-   int lightCount = std::min(MAX_LIGHTS, (unsigned int)lights.size());
-
-   float lightPosBuffer[MAX_LIGHTS * 3];
-   float lightColBuffer[MAX_LIGHTS * 3];
-
-   for(int i = 0; i<lightCount; i ++){
-      lightPosBuffer[i*3  ] = lights[i].position.x;
-      lightPosBuffer[i*3+1] = lights[i].position.y;
-      lightPosBuffer[i*3+2] = lights[i].position.z;
-
-      lightColBuffer[i*3  ] = lights[i].color.x;
-      lightColBuffer[i*3+1] = lights[i].color.y;
-      lightColBuffer[i*3+2] = lights[i].color.z;
-   }
-
-   for (const gpuMesh& mesh : meshes){
+   for (const gpuObject& gpuObject : m_objects){
       
-      const object& obj = mesh.obj;
-      const GLuint& vao = mesh.vao;
-      const GLuint& vbo = mesh.vbo;
+      const object& objRef = gpuObject.obj;
+      const GLuint& vao = gpuObject.vao;
+      const GLuint& vbo = gpuObject.vbo;
 
-      vec4 color = hexColorToFloat(obj.getColor());
+      vec4 color = hexColorToFloat(objRef.getColor());
 
       // Setup the VBO using the VAO
       GLScopedVAO tempVAO(vao);
@@ -128,21 +104,21 @@ void gpuRenderEngine::render(){
 
 
       // update the uniform color
-      glUniformMatrix4fv(glGetUniformLocation(shaderProgram3D, "view"),1,GL_FALSE,&m_camera.getViewMatrix().m[0][0]);
-      glUniformMatrix4fv(glGetUniformLocation(shaderProgram3D, "project"),1,GL_FALSE,&m_camera.getProjectionMatrix().m[0][0]);
+      glUniformMatrix4fv(glGetUniformLocation(m_shaderProgram3D, "view"),1,GL_FALSE,&m_camera.getViewMatrix().m[0][0]);
+      glUniformMatrix4fv(glGetUniformLocation(m_shaderProgram3D, "project"),1,GL_FALSE,&m_camera.getProjectionMatrix().m[0][0]);
 
-      glUniform1i(glGetUniformLocation(shaderProgram3D, "lightCount"),lightCount);
-      glUniform3fv(glGetUniformLocation(shaderProgram3D, "lightPos"),lightCount,&lightPosBuffer[0]);
-      glUniform3fv(glGetUniformLocation(shaderProgram3D, "lightCol"),lightCount,&lightColBuffer[0]);
+      glUniform1i(glGetUniformLocation(m_shaderProgram3D, "lightCount"),lightCount);
+      glUniform3fv(glGetUniformLocation(m_shaderProgram3D, "lightPos"),lightCount,&m_lightPositions[0]);
+      glUniform3fv(glGetUniformLocation(m_shaderProgram3D, "lightCol"),lightCount,&m_lightColors[0]);
 
-      glUniform3fv(glGetUniformLocation(shaderProgram3D, "objCol"),1,&color[0]);
-      glUniformMatrix4fv(glGetUniformLocation(shaderProgram3D, "scale"),1,GL_FALSE,&obj.getScaleMatrix().m[0][0]);
-      glUniformMatrix4fv(glGetUniformLocation(shaderProgram3D, "transform"),1,GL_FALSE,&obj.getTransformMatrix().m[0][0]);
+      glUniform3fv(glGetUniformLocation(m_shaderProgram3D, "objCol"),1,&color[0]);
+      glUniformMatrix4fv(glGetUniformLocation(m_shaderProgram3D, "scale"),1,GL_FALSE,&objRef.getScaleMatrix().m[0][0]);
+      glUniformMatrix4fv(glGetUniformLocation(m_shaderProgram3D, "transform"),1,GL_FALSE,&objRef.getTransformMatrix().m[0][0]);
       
       // Activate this texture here so we dont have to do it for every sub mesh
       GLScopedActiveTexture tempActiveTex(GL_TEXTURE0);
 
-      for (const gpuSubMesh& sub : mesh.subMeshes) {
+      for (const gpuSubMesh& sub : gpuObject.subMeshes) {
 
          const GLuint& ebo = sub.ebo;
          const GLuint& tex = sub.tex;
@@ -153,8 +129,8 @@ void gpuRenderEngine::render(){
          int textureIntBool;
          textureIntBool = (sub.textured) ? 1 : 0;
 
-         glUniform1ui(glGetUniformLocation(shaderProgram3D, "hasTexture"), textureIntBool);
-         glUniform1i(glGetUniformLocation(shaderProgram3D, "diffuseTex"), 0);
+         glUniform1ui(glGetUniformLocation(m_shaderProgram3D, "hasTexture"), textureIntBool);
+         glUniform1i(glGetUniformLocation(m_shaderProgram3D, "diffuseTex"), 0);
 
          glDrawElements(GL_TRIANGLES,sub.indiceCount, GL_UNSIGNED_INT, 0);
       }
