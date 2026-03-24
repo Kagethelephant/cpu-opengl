@@ -26,6 +26,7 @@ struct vec2 {
    vec2(const vec2& other) : c{other.c[0], other.c[1]}, x(c[0]), y(c[1]) {}
    vec2& operator = (const vec2& other){if (this != &other) c = other.c; return *this;}
 
+
    // ---------- MEMBER FUNCTIONS
 
    /// @brief: returns the magnitude of the vector
@@ -51,6 +52,8 @@ struct vec2 {
    vec2 operator - (const vec2& v) const {return vec2(this->c[0] - v.c[0], this->c[1] - v.c[1]); } // Subtract 2 vectors
    vec2 operator * (const float& f) const {return vec2(this->c[0] * f, this->c[1] * f); } // Scale vector by float
    vec2 operator / (const float& f) const {return vec2(this->c[0] / f, this->c[1] / f); } // Scale vector by float
+   bool operator ==(const vec2& v) const {return c[0] == v.c[0] && c[1] == v.c[1];}
+   bool operator !=(const vec2& v) const {return !(*this == v);}
    // Compound Operators
    vec2& operator += (const vec2& v) { this->c[0] += v.c[0]; this->c[1] += v.c[1]; return *this;} // Add 2 vectors
    vec2& operator -= (const vec2& v) { this->c[0] -= v.c[0]; this->c[1] -= v.c[1]; return *this; } // Subtract 2 vectors
@@ -114,6 +117,8 @@ struct vec3 {
    vec3 operator - (const vec3& v) const {return vec3(this->c[0] - v.c[0], this->c[1] - v.c[1], this->c[2] - v.c[2]); } // Subtract 2 vectors
    vec3 operator * (const float& f) const {return vec3(this->c[0] * f, this->c[1] * f, this->c[2] * f); } // Scale vector by float
    vec3 operator / (const float& f) const {return vec3(this->c[0] / f, this->c[1] / f, this->c[2] / f); } // Scale vector by float
+   bool operator ==(const vec3& v) const { return c[0] == v.c[0] && c[1] == v.c[1] && c[2] == v.c[2];}
+   bool operator !=(const vec3& v) const {return !(*this == v);}
    // Compound Operators
    vec3& operator += (const vec3& v) { this->c[0] += v.c[0]; this->c[1] += v.c[1]; this->c[2] += v.c[2]; return *this; } // Add 2 vectors
    vec3& operator -= (const vec3& v) { this->c[0] -= v.c[0]; this->c[1] -= v.c[1]; this->c[2] -= v.c[2]; return *this; } // Subtract 2 vectors
@@ -186,6 +191,8 @@ struct vec4 {
    vec4 operator - (const vec4& v) const {return vec4(this->c[0] - v.c[0], this->c[1] - v.c[1], this->c[2] - v.c[2], this->c[3] - v.c[3]); } // Subtract 2 vectors
    vec4 operator * (const float& f) const {return vec4(this->c[0] * f, this->c[1] * f, this->c[2] * f, this->c[3] * f); } // Scale vector by float
    vec4 operator / (const float& f) const {return vec4(this->c[0] / f, this->c[1] / f, this->c[2] / f, this->c[3] / f); } // Scale vector by float
+   bool operator ==(const vec4& v) const { return c[0] == v.c[0] && c[1] == v.c[1] && c[2] == v.c[2] && c[3] == v.c[3];}
+   bool operator !=(const vec4& v) const {return !(*this == v);}
    // Compound Operators
    vec4& operator += (const vec4& v) { this->c[0] += v.c[0]; this->c[1] += v.c[1]; this->c[2] += v.c[2]; this->c[3] += v.c[3]; return *this; } // Add 2 vectors
    vec4& operator -= (const vec4& v) { this->c[0] -= v.c[0]; this->c[1] -= v.c[1]; this->c[2] -= v.c[2]; this->c[3] -= v.c[3]; return *this; } // Subtract 2 vectors

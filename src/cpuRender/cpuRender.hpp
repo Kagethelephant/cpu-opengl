@@ -167,6 +167,7 @@ private:
    /// planes in clip space (after projection, before perspective division)
    void clipTriangles();
 
+   void resizeBuffers(const vec2& res);
    /// @brief: Checks the given triangle for winding in screen space
    /// @param tri: triangle to check for culling
    bool backFaceCulling(const triangle3d& tri);

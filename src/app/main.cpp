@@ -88,15 +88,15 @@ int main(int argc, char* argv[]){
 
 
       //------------------- PROGRAM LOOP ------------------------
-      while(!glfwWindowShouldClose(programWindow.win)){
-         
+      while(!programWindow.shouldClose()){
+        
          //------------------- USER INPUT ------------------------
          // Multiply the speed of movement and rotation by the amount of time the last frame took
          // This will make it so very high and low frame rates will move relatively the same in real time
-         double posDelta = posSpeed * programWindow.frameTime;
-         double rotDelta = rotSpeed * programWindow.frameTime;
+         double posDelta = posSpeed * programWindow.getFrameElapsedTime();
+         double rotDelta = rotSpeed * programWindow.getFrameElapsedTime();
 
-         if (programWindow.checkKey(GLFW_KEY_ESCAPE)) {glfwSetWindowShouldClose(programWindow.win, true);}
+         if (programWindow.checkKey(GLFW_KEY_ESCAPE)) {programWindow.close();}
          if (programWindow.checkKey(GLFW_KEY_ENTER, window::KeyMode::PressedOnce)) {useGPU = !useGPU;}
          if (programWindow.checkKey(GLFW_KEY_S)) {userCamera.move(0, 0, -posDelta);}
          if (programWindow.checkKey(GLFW_KEY_W)) {userCamera.move(0, 0, posDelta);}
@@ -107,19 +107,23 @@ int main(int argc, char* argv[]){
          if (programWindow.checkKey(GLFW_KEY_UP)) {userCamera.rotate(rotDelta, 0, 0);}
          if (programWindow.checkKey(GLFW_KEY_DOWN)) {userCamera.rotate(-rotDelta, 0, 0);}
 
+         // Update the resolution per fram in case the window changes size
+         const vec2& resolution = programWindow.getFboSize();
+
          //------------------- RENDER PIPELINE ------------------------
          if(useGPU){ 
             gpuRend.render();
-            text.RenderText("GPU", programWindow.fboWidth/2.0f, 10,Color::Green);
+            text.RenderText("GPU", resolution.x/2.0f, 10,Color::Green);
          }
          else { 
             cpuRend.render();
-            text.RenderText("CPU", programWindow.fboWidth/2.0f, 10, Color::Blue);
+            text.RenderText("CPU", resolution.x/2.0f, 10, Color::Blue);
          }
-         text.RenderText("FPS: " + std::to_string(programWindow.fps), 10, 10);
+         text.RenderText("FPS: " + std::to_string(programWindow.getFPS()), 10, 10);
 
          // Renders the FBO to the screen, checks for events, updates FPS, etc.
          programWindow.frameUpdate();
+         userCamera.updateView();
       }
    }
    // Called after scope so all GLFW object destructors can be called

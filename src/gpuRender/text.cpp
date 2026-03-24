@@ -99,9 +99,10 @@ void textRenderEngine::RenderText(std::string text, float x, float y, Color col)
    // Convert hex color to normalized RGB (0–1 range)
    vec3 color = hexColorToFloat(col).xyz();
 
+   const vec2& resolution = m_window.getFboSize();
    // Bind window FBO to draw to and set viewport to match
-   GLScopedFBO tempFBO(m_window.fbo);
-   GLScopedViewport tempViewPort(0, 0, m_window.fboWidth, m_window.fboHeight);
+   GLScopedFBO tempFBO(m_window.getFbo());
+   GLScopedViewport tempViewPort(0, 0, resolution.x, resolution.y);
 
    GLScopedVAO tempVAO(m_vao);
    GLScopedVBO tempVBO(m_vbo);
@@ -123,15 +124,15 @@ void textRenderEngine::RenderText(std::string text, float x, float y, Color col)
       const character& ch = m_characters[c];
 
       float xpos = x + ch.bearing[0];
-      float ypos = m_window.fboHeight - y - ch.bearing[1]; // Convert to top-left origin
+      float ypos = resolution.y - y - ch.bearing[1]; // Convert to top-left origin
       float w = ch.size[0];
       float h = ch.size[1];
 
       // Convert pixel positions to NDC coordinates of the quad (NDC is bewteen -1 and 1)
-      float xmin = (2*(xpos)   / m_window.fboWidth ) -1;
-      float xmax = (2*(xpos+w) / m_window.fboWidth ) -1;
-      float ymin = (2*(ypos)   / m_window.fboHeight) -1;
-      float ymax = (2*(ypos+h) / m_window.fboHeight) -1;
+      float xmin = (2*(xpos)   / resolution.x ) -1;
+      float xmax = (2*(xpos+w) / resolution.x ) -1;
+      float ymin = (2*(ypos)   / resolution.y) -1;
+      float ymax = (2*(ypos+h) / resolution.y) -1;
 
       // Generate 2 triangles (quad) with position (NDC) and UV coordinates
       m_vertices = {

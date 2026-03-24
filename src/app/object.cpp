@@ -42,6 +42,12 @@ void camera::rotate(float u, float v, float w) {
    m_viewMatrix = matrix_view(matrix_pointAt(m_position, m_direction, up));
 }
 
+void camera::updateView(){
+   if (m_aspectRatio != m_window.getAspectRatio()){
+      m_aspectRatio = m_window.getAspectRatio();
+      m_projectionMatrix = matrix_project(m_fov, m_aspectRatio,m_near,m_far);  
+   }
+}
 
 //---------------------- OBJECT TRANSFORMATIONS ----------------------
 

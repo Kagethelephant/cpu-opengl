@@ -66,7 +66,8 @@ public:
    /// @param win: window the camera renders to (used to obtain viewport aspect ratio)
    /// @param fov: vertical field of view of the camera in degrees
    camera(window& win, float fov = 70) : m_window(win), m_fov(fov) { 
-      m_projectionMatrix = matrix_project(m_fov, m_window.aspectRatio,m_near,m_far);  
+      m_aspectRatio = m_window.getAspectRatio();
+      m_projectionMatrix = matrix_project(m_fov, m_aspectRatio,m_near,m_far);  
       // Call move and rotate on creation to initialize view matrix
       move(0,0,0); 
       rotate(0,0,0);
@@ -84,6 +85,9 @@ public:
    /// @param v: Rotate around the up vector of the camera
    /// @param w: Rotate around the forward vector of the camera
    void rotate(float u, float v, float w);
+
+
+   void updateView();
 
    /// @brief: Returns const reference to camera position
    const vec3& getPosition() const { return (m_position);}
@@ -105,13 +109,13 @@ public:
    float getNearPlane() const {return (m_near);};
    /// @brief: Set far plane position of camera, and update projection matrix
    /// @param far: far plane location as float 
-   void setFarPlane(float far) {m_far = far; m_projectionMatrix = matrix_project(m_fov,m_window.aspectRatio,m_near,m_far); };
+   void setFarPlane(float far) {m_far = far; m_projectionMatrix = matrix_project(m_fov,m_aspectRatio,m_near,m_far); };
    /// @brief: Set near plane position of camera, and update projection matrix
    /// @param near: near plane location as float 
-   void setNearPlane(float near) {m_near = near; m_projectionMatrix = matrix_project(m_fov,m_window.aspectRatio,m_near,m_far); };
+   void setNearPlane(float near) {m_near = near; m_projectionMatrix = matrix_project(m_fov,m_aspectRatio,m_near,m_far); };
    /// @brief: Set field of view of camera, and update projection matrix
    /// @param fov: field of view of the camera
-   void setFOV(float fov) {m_fov = fov; m_projectionMatrix = matrix_project(m_fov,m_window.aspectRatio,m_near,m_far); };
+   void setFOV(float fov) {m_fov = fov; m_projectionMatrix = matrix_project(m_fov,m_aspectRatio,m_near,m_far); };
 
 private:
 
@@ -121,6 +125,8 @@ private:
    float m_far = 1000.0f;
    /// @brief: Near plane of view frustum
    float m_near = 0.1f;
+
+   float m_aspectRatio;
 
    /// @brief: View matrix used for both GPU and CPU rendering.
    /// Transforms vertices from world space into camera (view) space, where the camera is treated as if it were at the origin

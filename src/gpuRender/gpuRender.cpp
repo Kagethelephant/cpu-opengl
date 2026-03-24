@@ -74,13 +74,15 @@ void gpuRenderEngine::bindObject(const object& obj){
 
 void gpuRenderEngine::render(){
 
+   const vec2& resolution = m_window.getFboSize();
    // Set OpenGL states that are agnostic of object or submesh 
-   GLScopedFBO tempFBO(m_window.fbo);                                            // Window FBO to draw to
-   GLScopedViewport tempViewPort(0, 0, m_window.fboWidth, m_window.fboHeight);   // Viewport matching FBO size
-   GLScopedProgram tempProgram(m_shaderProgram3D);                               // 3D rendering shader program
-   GLScopedCapability tempCullEnable(GL_CULL_FACE,true);                         // Backface culling enable
-   GLScopedCullFace tempCullMode(GL_BACK);                                       // Ensure back face is culled rather than front
-   GLScopedCapability tempDepthEnable(GL_DEPTH_TEST, true);                      // Depth buffer test
+   GLScopedFBO tempFBO(m_window.getFbo());                                // Window FBO to draw to
+   GLScopedViewport tempViewPort(0, 0, resolution.x, resolution.y);  // Viewport matching FBO size
+   GLScopedProgram tempProgram(m_shaderProgram3D);                   // 3D rendering shader program
+   GLScopedCapability tempCullEnable(GL_CULL_FACE,true);             // Backface culling enable
+   GLScopedCullFace tempCullMode(GL_BACK);                           // Ensure back face is culled rather than front
+   GLScopedCapability tempDepthEnable(GL_DEPTH_TEST, true);          // Depth buffer test
+   GLScopedActiveTexture tempActiveTex(GL_TEXTURE0);                 // Active texture (only texture 0 is used)
 
    // Clear the FBO to remove what was rendered last frame
    vec4 bgColor = hexColorToFloat(Color::Black);
@@ -103,7 +105,7 @@ void gpuRenderEngine::render(){
       GLScopedVBO tempVBO(vbo);
 
 
-      // update the uniform color
+      // update the uniforms per fram to account for camera, object or light moves
       glUniformMatrix4fv(glGetUniformLocation(m_shaderProgram3D, "view"),1,GL_FALSE,&m_camera.getViewMatrix().m[0][0]);
       glUniformMatrix4fv(glGetUniformLocation(m_shaderProgram3D, "project"),1,GL_FALSE,&m_camera.getProjectionMatrix().m[0][0]);
 
@@ -115,8 +117,6 @@ void gpuRenderEngine::render(){
       glUniformMatrix4fv(glGetUniformLocation(m_shaderProgram3D, "scale"),1,GL_FALSE,&objRef.getScaleMatrix().m[0][0]);
       glUniformMatrix4fv(glGetUniformLocation(m_shaderProgram3D, "transform"),1,GL_FALSE,&objRef.getTransformMatrix().m[0][0]);
       
-      // Activate this texture here so we dont have to do it for every sub mesh
-      GLScopedActiveTexture tempActiveTex(GL_TEXTURE0);
 
       for (const gpuSubMesh& sub : gpuObject.subMeshes) {
 

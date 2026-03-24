@@ -1,7 +1,6 @@
 #include "cpuRender.hpp"
 // Standard Libraries
 #include <algorithm>
-#include <cstdint>
 #include <cstring>
 #include <vector>
 #include <math.h>
@@ -18,7 +17,7 @@
 
 cpuRenderEngine::cpuRenderEngine(camera& cam) : m_camera{cam}, m_window{cam.getWindow()}{
 
-   m_resolution = vec2(m_window.fboWidth,m_window.fboHeight);
+   m_resolution = m_window.getFboSize();
 
    // Calculate the planes in clip-space that make up the frustum (box that represents the field of view)
    m_planes[0] = vec4( 1, 0, 0, 1);  // Left
@@ -28,24 +27,7 @@ cpuRenderEngine::cpuRenderEngine(camera& cam) : m_camera{cam}, m_window{cam.getW
    m_planes[4] = vec4( 0, 0, 1, 1);  // Near
    m_planes[5] = vec4( 0, 0, -1, 1); // Far
 
-   // Create a background buffer the size of the window to clear the pixel buffer with a color
-   m_clearBuffer = std::vector<std::uint8_t>(m_resolution[0] * m_resolution[1] * 4, 0);
-   m_zBuffer = std::vector<float>(m_resolution[0] * m_resolution[1], 1.0f);
-
-   // Make a clear buffer to initialize the screen (pixelBuffer) to the background color every frame
-   vec4 backgroundColor(hexColorToRGB(Color::Black));
-
-   for (int y = 0; y < m_resolution[1]; y++){
-      for (int x = 0; x < m_resolution[0]; x++){
-
-         int index = (y * m_resolution[0] + x);
-         m_clearBuffer[index*4] = backgroundColor[0];
-         m_clearBuffer[index*4 + 1] = backgroundColor[1];
-         m_clearBuffer[index*4 + 2] = backgroundColor[2];
-         m_clearBuffer[index*4 + 3] = backgroundColor[3];
-      }
-   }
-   m_pixelBuffer = m_clearBuffer;
+   resizeBuffers(m_resolution);
 }
 
 
@@ -53,6 +35,14 @@ cpuRenderEngine::cpuRenderEngine(camera& cam) : m_camera{cam}, m_window{cam.getW
 //---------------------- 3D RENDER PIPELINE ----------------------
 
 void cpuRenderEngine::render() {
+   // Update resolution in case the window changed
+   vec2 newRes = m_window.getFboSize();
+
+   if (newRes != m_resolution) {
+      resizeBuffers(newRes);
+      m_resolution = newRes;
+   }
+
    // Camera owns view and projection matrix since it also owns camera FOV, direction and position 
    mat4x4 p = m_camera.getProjectionMatrix();
    mat4x4 v = m_camera.getViewMatrix();
@@ -126,9 +116,9 @@ void cpuRenderEngine::render() {
    }
 
    // Texture needs to be attached to the window FBO. window render call will draww it to the window
-   GLScopedTexture2D tempTexture(m_window.colorTex);
+   GLScopedTexture2D tempTexture(m_window.getColorTexture());
    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-   glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_window.fboWidth, m_window.fboHeight, GL_RGBA, GL_UNSIGNED_BYTE, m_pixelBuffer.data());
+   glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_resolution.x, m_resolution.y, GL_RGBA, GL_UNSIGNED_BYTE, m_pixelBuffer.data());
    // Clear the pixel buffer with the background color so frames dont stack
    std::memcpy(m_pixelBuffer.data(), m_clearBuffer.data(), m_pixelBuffer.size());
    // Clear the z buffer with far depth
@@ -375,9 +365,33 @@ void cpuRenderEngine::raster(const triangle3d& pr, const object& obj, const mode
 
 //---------------------- HELPER FUNCTIONS ----------------------
 
+void cpuRenderEngine::resizeBuffers(const vec2& res) {
+    int pixelCount = res.x * res.y;
+
+    m_pixelBuffer.resize(pixelCount * 4);
+    m_clearBuffer.resize(pixelCount * 4);
+    m_zBuffer.resize(pixelCount);
+
+    // Rebuild clear buffer
+    vec4 backgroundColor(hexColorToRGB(Color::Black));
+
+    for (int i = 0; i < pixelCount; ++i) {
+        m_clearBuffer[i*4 + 0] = backgroundColor[0];
+        m_clearBuffer[i*4 + 1] = backgroundColor[1];
+        m_clearBuffer[i*4 + 2] = backgroundColor[2];
+        m_clearBuffer[i*4 + 3] = backgroundColor[3];
+    }
+
+    // Initialize working buffers
+    std::memcpy(m_pixelBuffer.data(), m_clearBuffer.data(), m_pixelBuffer.size());
+    std::fill(m_zBuffer.begin(), m_zBuffer.end(), 1.0f);
+}
+
+
 float cpuRenderEngine::planeIntersect(const vec4& a, const vec4& b, const vec4& plane) {
    return plane.dot(a) / (plane.dot(a) - plane.dot(b));
 }
+
 
 bool cpuRenderEngine::backFaceCulling(const triangle3d& tri) {
     // Use only X/Y in screen space.

@@ -3,59 +3,50 @@
 #include "shaders/shader.hpp"
 
 #include <glad/glad.h>
-#include <GL/gl.h>
 #include <GLFW/glfw3.h>
 #include <math.h>
 #include <iostream>
 #include <vector>
 
 
-window::window(int _height){
-   // SET WINDOW AND FBO SIZE
-   // -----------------------------------------------------------------------------------
-   // Set the size of the window to the size of the display initially
+window::window(int height){
+   //---------------------- SET FBO AND WINDOW SIZE ----------------------
+   // On start make the window the size of the display
    const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
-   windowWidth = mode->width;
-   windowHeight = mode->height;
+   windowSize.x = mode->width;
+   windowSize.y = mode->height;
 
-   // Set the size of the FBO (this can be scaled down from window dimmensions for pixelated effect)
-   fboHeight = _height;
-   aspectRatio = float(windowWidth) / float(windowHeight);  // initial estimate
-   fboWidth = int(fboHeight * aspectRatio);
+   // FBO is the texture that we draw everything to. Lower resolution will give pixelated look
+   aspectRatio = float(windowSize.x) / float(windowSize.y);
+   fboSize.y = height;
+   fboSize.x = int(fboSize.y * aspectRatio);
 
 
+   //---------------------- SETUP GLFW ----------------------
 
-   // SETUP GLFW
-   // -----------------------------------------------------------------------------------
-   // Create a GLFW window
-   win = glfwCreateWindow(windowWidth, windowHeight, "The Game", NULL, NULL);
+   win = glfwCreateWindow(windowSize.x, windowSize.y, "The Game", NULL, NULL);
    glfwMakeContextCurrent(win);
-   // Maximum width and height are set to GLFW_DONT_CARE to allow unlimited expansion
-   glfwSetWindowSizeLimits(win, GLFW_DONT_CARE, fboHeight, GLFW_DONT_CARE, GLFW_DONT_CARE);
+   // Dont let the window height scale below FBO height
+   glfwSetWindowSizeLimits(win, GLFW_DONT_CARE, fboSize.y, GLFW_DONT_CARE, GLFW_DONT_CARE);
    // This disables vsync
    glfwSwapInterval(0); 
-
-   // Initialize GLAD (GLAD provides us with openGL commands)
+   // Initialize GLAD (Loads functions from the GPU)
    gladLoadGL();
 
    // Print GPU information
-   const GLubyte* vendor = glGetString(GL_VENDOR);
-   const GLubyte* renderer = glGetString(GL_RENDERER);
-   const GLubyte* version = glGetString(GL_VERSION);
+   std::cout << "GPU Vendor: " << glGetString(GL_VENDOR) << std::endl;
+   std::cout << "GPU Model: " << glGetString(GL_RENDERER) << std::endl;
+   std::cout << "OpenGL Version: " << glGetString(GL_VERSION) << std::endl;
 
-   std::cout << "GPU Vendor: " << vendor << std::endl;
-   std::cout << "GPU Model: " << renderer << std::endl;
-   std::cout << "OpenGL Version: " << version << std::endl;
-
-   // Setup callbacks
-   glfwSetWindowUserPointer(win, this);
+   // Makes it so "this*" can be used to reference the GLFW window in this classes callback functions
+   glfwSetWindowUserPointer(win, this); 
    glfwSetFramebufferSizeCallback(win, [](GLFWwindow* _win, int w, int h){
 
       auto* self = static_cast<window*>(glfwGetWindowUserPointer(_win));
       if (!self) return;
 
-      self->windowWidth  = w;
-      self->windowHeight = h;
+      self->windowSize.x  = w;
+      self->windowSize.y = h;
       self->aspectRatio  = float(w) / float(h);
 
       self->resizePending = true;
@@ -100,7 +91,7 @@ window::window(int _height){
       // Color attachment
       glGenTextures(1, &colorTex);
       GLScopedTexture2D tempTexture(colorTex);
-      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, fboWidth, fboHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, fboSize.x, fboSize.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -109,12 +100,10 @@ window::window(int _height){
 
       glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTex, 0);
    }
-
-
    {
       glGenTextures(1, &depth);
       GLScopedTexture2D tempTexture(depth);
-      glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, fboWidth, fboHeight, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, fboSize.x, fboSize.y, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
       // REQUIRED settings for depth textures
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -134,14 +123,17 @@ window::window(int _height){
 
 void window::resize(){
    if (resizePending){
+      // Recalculate FBO size (height fixed, width scales with aspect ratio)
+      fboSize.x = int(fboSize.y * aspectRatio);
       {
          GLScopedTexture2D tempTexture(colorTex);
-         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, fboWidth, fboHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, fboSize.x, fboSize.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
       }
       {
          GLScopedTexture2D tempDepth(depth);
-         glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, fboWidth, fboHeight, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+         glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, fboSize.x, fboSize.y, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
       }
+      aspectRatio = (float)fboSize.x / (float)fboSize.y;
       resizePending = false;
    }
 }
@@ -175,7 +167,7 @@ void window::frameUpdate(){
    glBindFramebuffer(GL_FRAMEBUFFER, 0);
    // Set the viewport, shader program and VAO with RAII wrappers that will reset to previous
    // OpenGL states at the end of the scope where they were bound
-   GLScopedViewport tempViewPort(0, 0, windowWidth, windowHeight);
+   GLScopedViewport tempViewPort(0, 0, windowSize.x, windowSize.y);
    GLScopedProgram tempProgram(shaderProgramUI);
    GLScopedVAO tempVAO(UIvao);
    // Select texture unit 0 and bind colorTex to GL_TEXTURE_2D on that unit
@@ -190,8 +182,7 @@ void window::frameUpdate(){
    currentTime = glfwGetTime();
    frameCount++;
    // If a second has passed
-   if (currentTime - lastTime >= 0.2f)
-   {
+   if (currentTime - lastTime >= 0.2f){
       // Calculate FPS and display it (e.g., in the window title or console)
       fps = (int)frameCount / (currentTime - lastTime);
       frameCount = 0;
